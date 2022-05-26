@@ -1,7 +1,7 @@
 /*
  * Sequences.h
  *
- *  Created on: 09 ÿíâ. 2015 ã.
+ *  Created on: 09 ï¿½ï¿½ï¿½. 2015 ï¿½.
  *      Author: Kreyl
  */
 
@@ -193,7 +193,7 @@ const LedRGBChunk_t lsqStart[] = {
         {csSetup, 90, clRed},
         {csSetup, 90, clGreen},
         {csSetup, 90, clBlue},
-        {csSetup, 90, {0, 2, 0}},
+        {csSetup, 90, {0, 1, 0}},
         {csEnd}
 };
 
@@ -210,6 +210,13 @@ const LedRGBChunk_t lsqFailure[] = {
         {csWait, 90},
         {csSetup, 0, clRed},
         {csWait, 90},
+        {csEnd}
+};
+
+const LedRGBChunk_t lsqBlink[] = {
+        {csSetup, 0, clGreen},
+        {csWait, 90},
+        {csSetup, 0, {0, 1, 0}},
         {csEnd}
 };
 

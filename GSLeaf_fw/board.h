@@ -18,7 +18,7 @@
 #define CRYSTAL_FREQ_HZ         12000000
 
 // OS timer settings
-#define STM32_ST_IRQ_PRIORITY   2
+#define STM32_ST_IRQ_PRIORITY   9
 #define STM32_ST_USE_TIMER      5
 #define STM32_TIMCLK1           (Clk.APB1FreqHz)    // Timer 5 is clocked by APB1
 
@@ -26,8 +26,8 @@
 #define I2C1_ENABLED            TRUE
 #define I2C2_ENABLED            FALSE
 #define I2C3_ENABLED            FALSE
-#define SIMPLESENSORS_ENABLED   TRUE
-#define BUTTONS_ENABLED         TRUE
+#define SIMPLESENSORS_ENABLED   FALSE
+#define BUTTONS_ENABLED         FALSE
 
 #define ADC_REQUIRED            FALSE
 #define STM32_DMA_REQUIRED      TRUE    // Leave this macro name for OS
@@ -45,9 +45,9 @@
 #define UART_RX_PIN     GPIOA, 10
 
 // RGB LED
-#define LED_RED_CH      { GPIOB, 4, TIM3, 1, invNotInverted, omPushPull, 255 }
+#define LED_BLUE_CH     { GPIOB, 4, TIM3, 1, invNotInverted, omPushPull, 255 }
 #define LED_GREEN_CH    { GPIOB, 1, TIM3, 4, invNotInverted, omPushPull, 255 }
-#define LED_BLUE_CH     { GPIOB, 0, TIM3, 3, invNotInverted, omPushPull, 255 }
+#define LED_RED_CH      { GPIOB, 0, TIM3, 3, invNotInverted, omPushPull, 255 }
 
 // PWR_EN
 #define PWR_EN_PIN      GPIOA, 15, omPushPull
@@ -68,6 +68,7 @@
 #define AU_SAI_B        SAI1_Block_B
 #define AU_SAI_RccEn()  RCC->APB2ENR |= RCC_APB2ENR_SAI1EN
 #define AU_SAI_RccDis() RCC->APB2ENR &= ~RCC_APB2ENR_SAI1EN
+//#define AU_SAI_RccRst() RCC->APB2RSTR = RCC_APB2RSTR_SAI1RST
 
 // Acc
 #define Acc_i2c         i2c1

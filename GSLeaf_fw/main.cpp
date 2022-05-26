@@ -11,8 +11,6 @@
 #include "acc_mma8452.h"
 #include "kl_fs_utils.h"
 #include "radio_lvl1.h"
-#include "SimpleSensors.h"
-#include "main.h"
 
 #if 1 // ======================== Variables and defines ========================
 // Forever
@@ -23,7 +21,7 @@ CmdUart_t Uart{CmdUartParams};
 void OnCmd(Shell_t *PShell);
 void ITask();
 
-//static void Standby();
+static void Standby();
 static void Resume();
 bool IsStandby = true;
 
@@ -32,10 +30,11 @@ bool IsStandby = true;
 LedRGB_t Led { LED_RED_CH, LED_GREEN_CH, LED_BLUE_CH };
 PinOutput_t PwrEn(PWR_EN_PIN);
 CS42L52_t Codec;
-State_t State = stateClosed;
+int32_t IdPlayingNow = -1;
+
 
 DirList_t DirList;
-//static char FName[MAX_NAME_LEN];
+static char FName[MAX_NAME_LEN], DirName[MAX_NAME_LEN];
 #endif
 
 int main(void) {
@@ -43,27 +42,20 @@ int main(void) {
     Clk.SetVoltageRange(mvrHiPerf);
     Clk.SetupFlashLatency(24, mvrHiPerf);
     Clk.EnablePrefetch();
-    if(Clk.EnableHSE() == retvOk) {
-        Clk.SetupPllSrc(pllsrcHse);
-        Clk.SetupM(3);
-    }
-    else { // PLL fed by MSI
-        Clk.SetupPllSrc(pllsrcMsi);
-        Clk.SetupM(1);
-    }
+    Clk.SetupPllSrc(pllsrcMsi);
+    Clk.SetupM(1);
+    // Prepare everything, but do not switch to PLL
     // SysClock = Rout = 24MHz, 48MHz = POut
     Clk.SetupPll(24, 4, 2); // 4 * 24 = 96, 96/4=24, 96/2=48
+    Clk.EnablePllROut();
+    // Setup PLLQ as 48MHz clock for USB and SDIO
+    Clk.EnablePllQOut();
+    Clk.Select48MHzClkSrc(src48PllQ);
+    // SAI clock = PLLP
+    Clk.EnablePllPOut();
+    Clk.SelectSAI1Clk(srcSaiPllP);
     Clk.SetupBusDividers(ahbDiv1, apbDiv1, apbDiv1);
-    if(Clk.EnablePLL() == retvOk) {
-        Clk.EnablePllROut();
-        Clk.SwitchToPLL();
-        // Setup PLLQ as 48MHz clock for USB and SDIO
-        Clk.EnablePllQOut();
-        Clk.Select48MHzClkSrc(src48PllQ);
-        // SAI clock
-        Clk.EnablePllPOut();
-        Clk.SelectSAI1Clk(srcSaiPllP);
-    }
+    if(Clk.EnablePLL() == retvOk) Clk.SwitchToPLL();
     Clk.UpdateFreqValues();
 
     // Init OS
@@ -76,27 +68,24 @@ int main(void) {
     Clk.PrintFreqs();
 
     Led.Init();
-//    Led.SetColor(clRed);
-
-    SD.Init();
-
-    AuPlayer.Init();
     PwrEn.Init();
     PwrEn.SetLo();
     chThdSleepMilliseconds(18);
+
     AU_i2c.Init();
 
     Codec.Init();
     Codec.SetSpeakerVolume(-96);    // To remove speaker pop at power on
     Codec.DisableHeadphones();
     Codec.EnableSpeakerMono();
-    Codec.SetupMonoStereo(Stereo); // Always
-    Codec.Standby();
-    Codec.SetSpeakerVolume(0);
-    Codec.SetMasterVolume(9);
-    Codec.Resume();
+    Codec.SetupMonoStereo(Stereo);  // For wav player
+    Codec.SetupSampleRate(22050); // Just default, will be replaced when changed
+    Codec.SetMasterVolume(9); // 12 is max
+    Codec.SetSpeakerVolume(0); // 0 is max
 
-//    Resume();
+    AuPlayer.Init();
+    Resume(); // To generate 48MHz for SD
+    SD.Init();
 
     if(Radio.Init() != retvOk) {
         Led.StartOrRestart(lsqFailure);
@@ -104,20 +93,14 @@ int main(void) {
     }
 
     if(SD.IsReady) {
-        Led.StartOrRestart(lsqStart);
-//            UsbMsd.Init();
         AuPlayer.Play("alive.wav", spmSingle);
+        Led.StartOrRestart(lsqStart);
     } // if SD is ready
     else {
         Led.StartOrRestart(lsqFailure);
         chThdSleepMilliseconds(3600);
-//            EnterSleep();
+//        EnterSleep();
     }
-
-//    AuPlayer.Play("alive.wav", spmSingle);
-
-//    Led.StartOrRestart(lsqIdle);
-    SimpleSensors::Init();
 
     // Main cycle
     ITask();
@@ -133,95 +116,25 @@ void ITask() {
                 break;
 
             case evtIdOnRadioRx: {
-//                int32_t rxID = Msg.Value;
-//                if(IdPlayingNow == ID_SURROUND) {
-//                    if(RxTable.EnoughTimePassed(rxID)) {
-//                        // Fadeout surround and play rcvd id
-//                        IdPlayNext = rxID;
-//                        Player.FadeOut();
-//                    }
-//                }
-//                else { // Playing some ID
-//                    if(rxID != IdPlayingNow) {  // Some new ID received
-//                        // Switch to new ID if current one is offline for enough time
-//                        if(RxTable.EnoughTimePassed(IdPlayingNow)) {
-//                            // Fadeout current and play rcvd id
-//                            IdPlayNext = rxID;
-//                            Player.FadeOut();
-//                        }
-//                    }
-//                }
-//                // Put timestamp to table
-//                RxTable.Put(rxID);
+                Led.StartOrRestart(lsqBlink);
+                int32_t rxID = Msg.Value+1;
+                Printf("Btn: %u\r", rxID);
+                if(rxID != IdPlayingNow) {  // Some new ID received
+                    itoa(rxID, DirName, 10);
+                    if(DirList.GetRandomFnameFromDir(DirName, FName) == retvOk) {
+                        IdPlayingNow = rxID;
+                        Resume();
+                        AuPlayer.Play(FName, spmSingle);
+                    }
+                    else Standby();
+                }
             } break;
 
-//            case evtIdAcc:
-//                if(State == stIdle) {
-//                    Printf("AccWhenIdle\r");
-//                    Led.StartOrRestart(lsqAccIdle);
-//                    State = stPlaying;
-//                    Audio.Resume();
-//                    Player.PlayRandomFileFromDir("Sounds");
-////                    Player.Play("Alive.wav");
-//                }
-//                else if(State == stWaiting) {
-//                    Printf("AccWhenW\r");
-//                    Led.StartOrRestart(lsqAccWaiting);
-//                    tmrPauseAfter.StartOrRestart();
-//                }
-//                break;
-
-#if 0 // ==== Logic ====
-            case evtIdSns:
-                Printf("Sns, %u\r", State);
-                if(State == stateClosed) {
-                    if(DirList.GetRandomFnameFromDir(DIRNAME_SND_CLOSED, FName) == retvOk) {
-                        Codec.Resume();
-                        Codec.SetMasterVolume(9);
-                        Player.Play(FName, spmSingle);
-                    }
-                    Led.StartOrRestart(lsqClosed);
-                }
-                else {
-                    if(DirList.GetRandomFnameFromDir(DIRNAME_SND_OPEN, FName) == retvOk) {
-                        Codec.Resume();
-                        Player.Play(FName, spmSingle);
-                    }
-                    // Close the door
-                    tmrOpen.Stop();
-                    State = stateClosed;
-                }
-                break;
-
-            case evtIdDoorIsClosing:
-                Printf("Closing\r");
-                State = stateClosed;
-                break;
-
-            case evtIdOpen:
-                Printf("Open\r");
-                State = stateOpen;
-                tmrOpen.StartOrRestart();
-                break;
-#endif
-
-            case evtIdAudioPlayStop: {
+            case evtIdAudioPlayStop:
+                IdPlayingNow = -1;
                 Printf("PlayEnd\r");
-//                Codec.Standby();
-//                IdPlayingNow = IdPlayNext;
-//                IdPlayNext = ID_SURROUND;
-//                // Decide what to play: surround or some id
-//                if(IdPlayingNow == ID_SURROUND) strcpy(DirName, DIRNAME_SURROUND);
-//                else itoa(IdPlayingNow, DirName, 10);
-////                Printf("Play %S\r", DirName);
-//                Player.PlayRandomFileFromDir(DirName);
-            } break;
-
-            case evtIdButtons:
-//                Printf("Btn %u\r", Msg.BtnEvtInfo.BtnID);
-//                if(Msg.BtnEvtInfo.BtnID == 0) Audio.VolumeUp();
-//                else Audio.VolumeDown();
-                break;
+                Standby();
+            break;
 
             default: break;
         } // switch
@@ -232,56 +145,30 @@ void Resume() {
     if(!IsStandby) return;
     Printf("Resume\r");
     // Clock
-//    Clk.SetCoreClk(cclk48MHz);
-//    Clk.SetupSai1Qas48MhzSrc();
+//    if(Clk.EnablePLL() == retvOk) Clk.SwitchToPLL();
+//    Clk.SetupBusDividers(ahbDiv1, apbDiv1, apbDiv1);
 //    Clk.UpdateFreqValues();
+//    chSysEnable();
 //    Clk.PrintFreqs();
     // Sound
-    Codec.Init();
-    Codec.SetSpeakerVolume(-96);    // To remove speaker pop at power on
-    Codec.DisableHeadphones();
-    Codec.EnableSpeakerMono();
-    Codec.SetupMonoStereo(Stereo);  // For wav player
-    Codec.SetupSampleRate(22050); // Just default, will be replaced when changed
-    Codec.SetMasterVolume(9); // 12 is max
-    Codec.SetSpeakerVolume(0); // 0 is max
+    Codec.Resume();
+
 
     IsStandby = false;
 }
 
-/*
 void Standby() {
     Printf("Standby\r");
-    // Sound
-    Codec.Deinit();
-    // Clock
-    Clk.SwitchToMSI();
-//    Clk.DisablePLL();
-//    Clk.DisableSai1();
-
-    Clk.UpdateFreqValues();
-    Clk.PrintFreqs();
+//    Codec.Deinit();
+    Codec.Standby();
+//    // Clock
+//    Clk.SwitchToMSI();
+//    Clk.DisablePll();
+//    Clk.SetupBusDividers(ahbDiv8, apbDiv1, apbDiv1);
+//    Clk.UpdateFreqValues();
+//    Clk.PrintFreqs();
     IsStandby = true;
 }
-*/
-
-void ProcessSns(PinSnsState_t *PState, uint32_t Len) {
-//    if(*PState == pssRising) {
-//        EvtQMain.SendNowOrExit(EvtMsg_t(evtIdSns));
-//    }
-//    Printf("st: %u\r", *PState);
-}
-
-//void ProcessChargePin(PinSnsState_t *PState, uint32_t Len) {
-//    if(*PState == pssFalling) { // Charge started
-//        Led.StartOrContinue(lsqCharging);
-//        Printf("Charge started\r");
-//    }
-//    if(*PState == pssRising) { // Charge ended
-////        Led.StartOrContinue(lsqOperational);
-//        Printf("Charge ended\r");
-//    }
-//}
 
 #if 1 // ======================= Command processing ============================
 void OnCmd(Shell_t *PShell) {
@@ -302,7 +189,10 @@ void OnCmd(Shell_t *PShell) {
 //        Audio.SetSpeakerVolume(v);
 //    }
 
-//    else if(PCmd->NameIs("A")) Player.Play("Alive.wav");
+    else if(PCmd->NameIs("A")) {
+        Resume();
+        AuPlayer.Play("alive.wav", spmSingle);
+    }
 //    else if(PCmd->NameIs("48")) {
 //        Audio.Resume();
 //        Player.Play("Mocart48.wav");

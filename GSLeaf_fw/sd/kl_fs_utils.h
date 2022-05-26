@@ -1,7 +1,7 @@
 /*
  * kl_fs_common.h
  *
- *  Created on: 30 ÿíâ. 2016 ã.
+ *  Created on: 30 ï¿½ï¿½ï¿½. 2016 ï¿½.
  *      Author: Kreyl
  */
 
@@ -51,7 +51,7 @@ struct DirRandData_t {
     int32_t FileCnt = 0;
 };
 
-#define DIR_CNT   9
+#define DIR_CNT   12
 
 class DirList_t {
 private:
@@ -92,6 +92,7 @@ public:
             AddDir(DirName);
             CountFiles("wav");  // Count files in dir
         }
+
         uint32_t Cnt = Dirs[CurrIndx].FileCnt;
         if(Cnt == 0) return retvFail; // Get out if nothing to play
         // Select number of file

@@ -60,7 +60,7 @@ void AuPlayer_t::IHandleIrq() {
 }
 
 // Thread
-static THD_WORKING_AREA(waAudioThread, 1024);   // Hangs with long file names when less than 1024 bytes here
+static THD_WORKING_AREA(waAudioThread, 2048);   // Hangs with long file names when less than 1024 bytes here
 __noreturn
 static void AudioThread(void *arg) {
     chRegSetThreadName("Audio");

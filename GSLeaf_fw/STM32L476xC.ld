@@ -15,8 +15,8 @@
 */
 
  /* Put it here instead of Makefile */
-__main_stack_size__     = 0x0400; 
-__process_stack_size__  = 0x0400;
+__main_stack_size__     = 0x0800; 
+__process_stack_size__  = 0x0800;
 
 /*
  * STM32L476xC memory setup.

@@ -72,13 +72,15 @@ static const uint8_t PwrTable[12] = {
 
 #if 1 // =========================== Pkt_t =====================================
 union rPkt_t {
-    uint32_t DW32;
+    uint32_t DW32[2];
     struct {
-        uint8_t ID;
-        int8_t Rssi; // Will be set after RX. Transmitting is useless, but who cares.
+        uint32_t Sign;
+        uint8_t R, G, B;
+        uint8_t BtnIndx;
     } __attribute__((__packed__));
     rPkt_t& operator = (const rPkt_t &Right) {
-        DW32 = Right.DW32;
+        DW32[0] = Right.DW32[0];
+        DW32[1] = Right.DW32[1];
         return *this;
     }
 } __attribute__ ((__packed__));
@@ -196,7 +198,7 @@ class rLevel1_t {
 private:
 public:
     rPkt_t PktRx, PktTx;
-    EvtMsgQ_t<RMsg_t, R_MSGQ_LEN> RMsgQ;
+//    EvtMsgQ_t<RMsg_t, R_MSGQ_LEN> RMsgQ;
     uint8_t Init();
     // Inner use
     void ITask();

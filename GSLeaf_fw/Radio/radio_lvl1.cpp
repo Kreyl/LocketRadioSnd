@@ -14,15 +14,15 @@
 
 cc1101_t CC(CC_Setup0);
 
-#define DBG_PINS
+//#define DBG_PINS
 
 #ifdef DBG_PINS
 #define DBG_GPIO1   GPIOB
-#define DBG_PIN1    10
+#define DBG_PIN1    14
 #define DBG1_SET()  PinSetHi(DBG_GPIO1, DBG_PIN1)
 #define DBG1_CLR()  PinSetLo(DBG_GPIO1, DBG_PIN1)
 #define DBG_GPIO2   GPIOB
-#define DBG_PIN2    9
+#define DBG_PIN2    15
 #define DBG2_SET()  PinSetHi(DBG_GPIO2, DBG_PIN2)
 #define DBG2_CLR()  PinSetLo(DBG_GPIO2, DBG_PIN2)
 #else
@@ -32,7 +32,6 @@ cc1101_t CC(CC_Setup0);
 
 rLevel1_t Radio;
 int8_t Rssi;
-//extern LedRGBwPower_t Led;
 
 #if 1 // ================================ Task =================================
 static THD_WORKING_AREA(warLvl1Thread, 256);
@@ -46,23 +45,13 @@ __noreturn
 void rLevel1_t::ITask() {
     while(true) {
         CC.Recalibrate();
-#if 0 // Testing Jig
-        uint8_t Rslt = CC.Receive(270, &PktRx, RPKT_LEN, &Rssi);
+        uint8_t Rslt = CC.Receive(27, &PktRx, RPKT_LEN, &Rssi);
         if(Rslt == retvOk) {
-            PktTx.Rssi = Rssi;
-            CC.Transmit(&PktTx, RPKT_LEN);
-            Printf("Rssi: our= %d; their=%d\r", Rssi, PktRx.Rssi);
-//            Led.StartOrRestart(lsqBlink);
+//            Printf("BtnID: %u; Rssi: %d\r", PktRx.BtnIndx, Rssi);
+            if(PktRx.Sign == 0xCA115EA1) EvtQMain.SendNowOrExit(EvtMsg_t(evtIdOnRadioRx, PktRx.BtnIndx));
         }
-#else // Device under test
-        CC.Transmit(&PktTx, RPKT_LEN);
-        uint8_t Rslt = CC.Receive(270, &PktRx, RPKT_LEN, &Rssi);
-        if(Rslt == retvOk) {
-            Printf("Rssi: our= %d; their=%d\r", Rssi, PktRx.Rssi);
-//            Led.StartOrRestart(lsqBlink);
-        }
-        chThdSleepMilliseconds(630);
-#endif
+        CC.PowerOff();
+        chThdSleepMilliseconds(450);
     } // while true
 }
 #endif // task
@@ -74,7 +63,7 @@ uint8_t rLevel1_t::Init() {
     PinSetupOut(DBG_GPIO2, DBG_PIN2, omPushPull);
 #endif
 
-    RMsgQ.Init();
+//    RMsgQ.Init();
     if(CC.Init() == retvOk) {
         CC.SetPktSize(RPKT_LEN);
         CC.DoIdleAfterTx();
@@ -84,7 +73,7 @@ uint8_t rLevel1_t::Init() {
 //        CC.EnterPwrDown();
 
         // Thread
-        chThdCreateStatic(warLvl1Thread, sizeof(warLvl1Thread), HIGHPRIO, (tfunc_t)rLvl1Thread, NULL);
+        chThdCreateStatic(warLvl1Thread, sizeof(warLvl1Thread), NORMALPRIO, (tfunc_t)rLvl1Thread, NULL);
         return retvOk;
     }
     else return retvFail;

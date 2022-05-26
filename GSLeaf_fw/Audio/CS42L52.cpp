@@ -155,7 +155,6 @@ const PinOutputPWM_t MClk(AU_MCLK_TIM);
 #endif
 
 // DMA Tx Completed IRQ
-extern "C"
 void DmaSAITxIrq(void *p, uint32_t flags) {
     chSysLockFromISR();
     if(Codec.SaiDmaCallbackI) Codec.SaiDmaCallbackI();
@@ -224,6 +223,9 @@ void CS42L52_t::Init() {
 #if 1 // ======= Setup SAI =======
     // === Clock ===
 //    Clk.EnableMCO(mcoHSE, mcoDiv1); // Master clock output
+    RCC->APB2RSTR = RCC_APB2RSTR_SAI1RST;
+    RCC->APB2RSTR = 0;
+    (void)RCC->APB2RSTR;
     AU_SAI_RccEn();
 
     // === GPIOs ===
@@ -274,19 +276,23 @@ void CS42L52_t::Deinit() {
         dmaStreamFree(PDmaTx);
         PDmaTx = nullptr;
     }
-    AU_SAI_A->CR2 = SAI_xCR2_FFLUSH;
-    Clk.DisableMCO();
+    DisableSAI();
+//    AU_SAI_A->CR2 = SAI_xCR2_FFLUSH;
+//    Clk.DisableMCO();
     PinRst.SetLo();
     AU_SAI_RccDis();
+
     IsOn = false;
 }
 
 void CS42L52_t::Standby() {
     WriteReg(CS_R_PWR_CTRL1, 0xFF);
+    MClk.Set(0);
     IsOn = false;
 }
 
 void CS42L52_t::Resume() {
+    MClk.Set(1);
     // PwrCtrl 1: Power on codec only
     WriteReg(CS_R_PWR_CTRL1, 0b11111110);
     IsOn = true;
@@ -341,7 +347,7 @@ void CS42L52_t::SetupMonoStereo(MonoStereo_t MonoStereo) {
 }
 
 void CS42L52_t::SetupSampleRate(uint32_t SampleRate) {  // Setup sample rate. No Auto, 32kHz, not27MHz
-    Printf("SetupSampleRate: %u\r", SampleRate);
+//    Printf("SetupSampleRate: %u\r", SampleRate);
     uint8_t                      v = (0b10 << 5) | (1 << 4) | (0 << 3) | (0b01 << 1);    // 16 kHz
     if     (SampleRate == 22050) v = (0b10 << 5) | (0 << 4) | (0 << 3) | (0b11 << 1);
     else if(SampleRate == 44100) v = (0b01 << 5) | (0 << 4) | (0 << 3) | (0b11 << 1);
@@ -352,7 +358,7 @@ void CS42L52_t::SetupSampleRate(uint32_t SampleRate) {  // Setup sample rate. No
 }
 
 void CS42L52_t::TransmitBuf(volatile void *Buf, uint32_t Sz16) {
-    PrintfI("txb %u\r", Sz16);
+//    PrintfI("txb %u\r", Sz16);
     dmaStreamDisable(PDmaTx);
     dmaStreamSetMemory0(PDmaTx, Buf);
     dmaStreamSetMode(PDmaTx, SAI_DMATX_MONO_MODE);

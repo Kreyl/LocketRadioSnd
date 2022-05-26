@@ -169,7 +169,7 @@ uint32_t TrueGenerate(uint32_t LowInclusive, uint32_t HighInclusive) {
 void SeedWithTrue() {
     while((RNG->SR & RNG_SR_DRDY) == 0);    // Wait for new random value
     uint32_t dw = RNG->DR;
-    srandom(dw);
+    Seed(dw);
 }
 
 } // namespace
@@ -2356,10 +2356,15 @@ void Clk_t::UpdateFreqValues() {
     // ==== Update prescaler in System Timer ====
     uint32_t Psc = (STM32_TIMCLK1 / OSAL_ST_FREQUENCY) - 1;
     TMR_DISABLE(STM32_ST_TIM);          // Stop counter
+    STM32_ST_TIM->SR = 0;
     uint32_t Cnt = STM32_ST_TIM->CNT;   // Save current time
+    uint32_t Dier = STM32_ST_TIM->DIER;
+    STM32_ST_TIM->DIER = 0;
     STM32_ST_TIM->PSC = Psc;
     TMR_GENERATE_UPD(STM32_ST_TIM);
     STM32_ST_TIM->CNT = Cnt;            // Restore time
+    STM32_ST_TIM->SR = 0;
+    STM32_ST_TIM->DIER = Dier;
     TMR_ENABLE(STM32_ST_TIM);
 }
 
