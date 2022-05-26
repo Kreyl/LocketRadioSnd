@@ -1,7 +1,7 @@
 /*
  * CS42L52.h
  *
- *  Created on: 15 марта 2017 г.
+ *  Created on: 15 пїЅпїЅпїЅпїЅпїЅ 2017 пїЅ.
  *      Author: Kreyl
  */
 
@@ -13,7 +13,7 @@
 
 #define CS42_I2C_ADDR       0x4A
 #define AU_BATMON_ENABLE    TRUE
-#define AU_VA_mv            2500    // Required for battery voltage calculation
+#define AU_VA_mv            2500UL    // Required for battery voltage calculation
 
 enum AuBeepFreq_t {abfC4=0b0000, abfC5=0b0001, abfD5=0b0010, abfE5=0b0011, abfF5=0b0100, abfG5=0b0101, abfA5=0b0110,
     abfB5=0b0111, abfC6=0b1000, abfD6=0b1001, abfE6=0b1010, abfF6=0b1011, abfG6=0b1100, abfA6=0b1101, abfB6=0b1110, abfC7=0b1111
@@ -34,7 +34,6 @@ enum MonoStereo_t { Stereo, Mono };
 
 class CS42L52_t {
 private:
-    const stm32_dma_stream_t *PDmaA, *PDmaB;
     void EnableSAI() {
         AU_SAI_A->CR1 |= SAI_xCR1_SAIEN;
 #if MIC_EN
@@ -43,16 +42,21 @@ private:
     }
     void DisableSAI() {
         AU_SAI_A->CR1 &= ~SAI_xCR1_SAIEN;
+        while(AU_SAI_A->CR1 & SAI_xCR1_SAIEN); // Poll until disabled.Will be disabled after current frame transmission is ended.
 #if MIC_EN
         AU_SAI_B->CR1 &= ~SAI_xCR1_SAIEN;
 #endif
     }
-    int8_t IVolume = 0;
+    int8_t IVolume;
     bool IsOn;
 public:
+    ftVoidVoid SaiDmaCallbackI = nullptr;
+
     void Init();
+    void Deinit();
     void Standby();
     void Resume();
+
     uint8_t ReadReg(uint8_t RegAddr, uint8_t *PValue);
     uint8_t WriteReg(uint8_t RegAddr, uint8_t Value);
     uint8_t WriteMany(uint8_t StartAddr, uint8_t *PValues, uint8_t Len);
@@ -93,7 +97,7 @@ public:
     // Rx/Tx
     void SetupMonoStereo(MonoStereo_t MonoStereo);
     void SetupSampleRate(uint32_t SampleRate);
-    void TransmitBuf(void *Buf, uint32_t Sz16);
+    void TransmitBuf(volatile void *Buf, uint32_t Sz16);
     bool IsTransmitting();
     void Stop();
 
@@ -102,6 +106,9 @@ public:
 #if AU_BATMON_ENABLE
     uint32_t GetBatteryVmv();
 #endif
+    CS42L52_t() : IVolume(0), IsOn(false) {}
 };
+
+extern CS42L52_t Codec;
 
 void AuOnNewSampleI(SampleStereo_t &Sample);

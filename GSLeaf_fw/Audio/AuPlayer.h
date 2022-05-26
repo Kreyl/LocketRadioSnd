@@ -1,7 +1,7 @@
 /*
  * AuPlayer.h
  *
- *  Created on: 4 июня 2017 г.
+ *  Created on: 4 пїЅпїЅпїЅпїЅ 2017 пїЅ.
  *      Author: Kreyl
  */
 
@@ -57,7 +57,6 @@ private:
     SndBuf_t *PCurBuf;
     void IPlayNext(const char* AFName, PlayMode_t AMode = spmSingle);
     void IPrepareToPlayNext(const char* AFName, PlayMode_t AMode = spmSingle);
-    binary_semaphore_t IAuSem;
 public:
     void Init();
 
@@ -69,6 +68,9 @@ public:
     PlayMode_t GetPlaymode() {
         return (ICurSnd->Track.mode() == WavReader::Mode::Single)? spmSingle : spmRepeat;
     }
+    bool IsPlayingNow() { return ICurSnd->IsPlaying(); }
+    void FadeOut() { ICurSnd->FadeOut(); }
+
     // Inner use
     void ITask();
     void IHandleIrq();
@@ -76,7 +78,7 @@ public:
         Codec.TransmitBuf(PBuf->Buf, PBuf->Sz*2);    // Sz16 == SzFrame*2
     }
     AuPlayer_t() : ISnd1(), ISnd2(), ICurSnd(&ISnd1), INextSnd(&ISnd2),
-            PCurBuf(nullptr), IAuSem(), FileToPlayNext(nullptr) {}
+            PCurBuf(nullptr), FileToPlayNext(nullptr) {}
 };
 
-extern AuPlayer_t Player;
+extern AuPlayer_t AuPlayer;

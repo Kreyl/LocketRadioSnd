@@ -1,7 +1,7 @@
 /*
  * EvtMsg.h
  *
- *  Created on: 21 апр. 2017 г.
+ *  Created on: 21 пїЅпїЅпїЅ. 2017 пїЅ.
  *      Author: Kreyl
  */
 
@@ -72,7 +72,7 @@ union EvtMsg_t {
         return *this;
     }
     EvtMsg_t() : Ptr(nullptr), ID(0) {}
-    EvtMsg_t(uint8_t AID) : ID(AID) {}
+    EvtMsg_t(uint8_t AID) : Ptr(nullptr), ID(AID) {}
     EvtMsg_t(uint8_t AID, void *APtr) : Ptr(APtr), ID(AID) {}
     EvtMsg_t(uint8_t AID, int32_t AValue) : Value(AValue), ID(AID) {}
     EvtMsg_t(uint8_t AID, uint8_t AValueID, int32_t AValue) : Value(AValue), ValueID(AValueID), ID(AID) {}
@@ -101,7 +101,7 @@ public:
     /* Retrieves a message from a mailbox, returns zero Msg if failed.
      * The invoking thread waits until a message is posted in the mailbox
      * for a timeout (may be TIME_INFINITE or TIME_IMMEDIATE */
-    T Fetch(systime_t Timeout) {
+    T Fetch(sysinterval_t Timeout) {
         T Msg;
         *(uint8_t*)&Msg = 0;    // Init it with zero somehow
         chSysLock();

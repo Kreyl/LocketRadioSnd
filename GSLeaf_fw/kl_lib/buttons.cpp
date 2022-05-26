@@ -85,7 +85,7 @@ void ProcessButtons(PinSnsState_t *BtnState, uint32_t Len) {
 
 #if BTN_DOUBLE_CLICK
             // Check if same button pressed within timeframe
-            if(IsWaitingSecondClick and FirstClickID == i and chVTTimeElapsedSinceX(DoubleClickTimer) < (TIME_MS2I(BTN_DOUBLECLICK_DELAY_MS))) {
+            if(IsWaitingSecondClick and FirstClickID == i and chVTTimeElapsedSinceX(DoubleClickTimer) < (MS2ST(BTN_DOUBLECLICK_DELAY_MS))) {
                 AddEvtToQueue(beDoubleClick, i);
                 IsWaitingSecondClick = false;
             }
@@ -151,7 +151,7 @@ void ProcessButtons(PinSnsState_t *BtnState, uint32_t Len) {
 #endif
             ) {
 //                Uart.Printf("Elapsed %u\r", chVTTimeElapsedSinceX(LongPressTimer));
-                if(chVTTimeElapsedSinceX(LongPressTimer) >= MS2ST(BTN_LONGPRESS_DELAY_MS)) {
+                if(chVTTimeElapsedSinceX(LongPressTimer) >= TIME_MS2I(BTN_LONGPRESS_DELAY_MS)) {
                     IsLongPress[i] = true;
                     AddEvtToQueue(beLongPress, i);
                 }
@@ -178,13 +178,15 @@ void ProcessButtons(PinSnsState_t *BtnState, uint32_t Len) {
 
 #if BTN_REPEAT // Check if repeat
             if(!IsRepeating[i]) {
-                if(TimeElapsed(&RepeatTimer, BTN_DELAY_BEFORE_REPEAT_MS)) {
+                if(chVTTimeElapsedSinceX(RepeatTimer) >= TIME_MS2I(BTN_DELAY_BEFORE_REPEAT_MS)) {
+                    RepeatTimer = chVTGetSystemTimeX();
                     IsRepeating[i] = true;
                     AddEvtToQueue(beRepeat, i);
                 }
             }
             else {
-                if(TimeElapsed(&RepeatTimer, BTN_REPEAT_PERIOD_MS)) {
+                if(chVTTimeElapsedSinceX(RepeatTimer) >= TIME_MS2I(BTN_REPEAT_PERIOD_MS)) {
+                    RepeatTimer = chVTGetSystemTimeX();
                     AddEvtToQueue(beRepeat, i);
                 }
             }

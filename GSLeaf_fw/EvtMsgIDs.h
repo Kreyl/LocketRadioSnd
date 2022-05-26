@@ -4,16 +4,23 @@ enum EvtMsgId_t {
     evtIdNone = 0, // Always
 
     // Pretending to eternity
-    evtIdShellCmd,
+    evtIdShellCmdRcvd,
     evtIdEverySecond,
 
+    // Usb
+    evtIdUsbConnect,
+    evtIdUsbDisconnect,
+    evtIdUsbReady,
+    evtIdUsbNewCmd,
+    evtIdUsbInDone,
+    evtIdUsbOutDone,
+
+    // Misc periph
     evtIdButtons,
     evtIdAcc,
-    evtIdOnRx,
+    evtIdPwrOffTimeout,
+    evtIdOnRadioRx,
 
-    evtIdSoundPlayStop,
-
-    evtIdSns,
-    evtIdOpen,
-    evtIdDoorIsClosing,
+    // Audio
+    evtIdAudioPlayStop,
 };

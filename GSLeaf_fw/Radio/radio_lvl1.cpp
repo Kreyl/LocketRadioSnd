@@ -8,16 +8,13 @@
 #include "radio_lvl1.h"
 #include "cc1101.h"
 #include "uart.h"
-#include "main.h"
 
 #include "led.h"
 #include "Sequences.h"
-extern LedRGBwPower_t Led;
 
 cc1101_t CC(CC_Setup0);
 
-
-//#define DBG_PINS
+#define DBG_PINS
 
 #ifdef DBG_PINS
 #define DBG_GPIO1   GPIOB
@@ -34,41 +31,41 @@ cc1101_t CC(CC_Setup0);
 #endif
 
 rLevel1_t Radio;
+int8_t Rssi;
+//extern LedRGBwPower_t Led;
 
 #if 1 // ================================ Task =================================
 static THD_WORKING_AREA(warLvl1Thread, 256);
 __noreturn
 static void rLvl1Thread(void *arg) {
     chRegSetThreadName("rLvl1");
+    Radio.ITask();
+}
+
+__noreturn
+void rLevel1_t::ITask() {
     while(true) {
-        int8_t Rssi;
-        rPkt_t RxPkt;
         CC.Recalibrate();
-        uint8_t RxRslt = CC.Receive(90, &RxPkt, RPKT_LEN, &Rssi);
-        if(RxRslt == retvOk) {
-            Printf("Rssi=%d\r", Rssi);
-            // Command from UsbHost to all lockets, no RSSI check
-            if(RxPkt.TheWord == 0xCA115EA1) {
-                EvtQMain.SendNowOrExit(EvtMsg_t(evtIdOpen));
-                rPkt_t TxPkt;
-                TxPkt.TheWord = 0x7A1E7A11;
-                for(int i=0; i<4; i++) {
-                    CC.Recalibrate();
-                    CC.Transmit(&TxPkt, RPKT_LEN);
-                    chThdSleepMilliseconds(4);
-                }
-            }
+#if 0 // Testing Jig
+        uint8_t Rslt = CC.Receive(270, &PktRx, RPKT_LEN, &Rssi);
+        if(Rslt == retvOk) {
+            PktTx.Rssi = Rssi;
+            CC.Transmit(&PktTx, RPKT_LEN);
+            Printf("Rssi: our= %d; their=%d\r", Rssi, PktRx.Rssi);
+//            Led.StartOrRestart(lsqBlink);
         }
-        CC.EnterPwrDown();
+#else // Device under test
+        CC.Transmit(&PktTx, RPKT_LEN);
+        uint8_t Rslt = CC.Receive(270, &PktRx, RPKT_LEN, &Rssi);
+        if(Rslt == retvOk) {
+            Printf("Rssi: our= %d; their=%d\r", Rssi, PktRx.Rssi);
+//            Led.StartOrRestart(lsqBlink);
+        }
         chThdSleepMilliseconds(630);
+#endif
     } // while true
 }
 #endif // task
-
-void rLevel1_t::TryToSleep(uint32_t SleepDuration) {
-    if(SleepDuration >= MIN_SLEEP_DURATION_MS) CC.EnterPwrDown();
-    chThdSleepMilliseconds(SleepDuration);
-}
 
 #if 1 // ============================
 uint8_t rLevel1_t::Init() {
@@ -77,12 +74,15 @@ uint8_t rLevel1_t::Init() {
     PinSetupOut(DBG_GPIO2, DBG_PIN2, omPushPull);
 #endif
 
-//    RMsgQ.Init();
+    RMsgQ.Init();
     if(CC.Init() == retvOk) {
-        CC.SetTxPower(CC_Pwr0dBm);
         CC.SetPktSize(RPKT_LEN);
-        CC.SetChannel(1);
+        CC.DoIdleAfterTx();
+        CC.SetChannel(RCHNL_EACH_OTH);
+        CC.SetTxPower(CC_Pwr0dBm);
+        CC.SetBitrate(CCBitrate100k);
 //        CC.EnterPwrDown();
+
         // Thread
         chThdCreateStatic(warLvl1Thread, sizeof(warLvl1Thread), HIGHPRIO, (tfunc_t)rLvl1Thread, NULL);
         return retvOk;

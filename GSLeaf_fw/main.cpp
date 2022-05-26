@@ -3,6 +3,7 @@
 #include "kl_i2c.h"
 #include "Sequences.h"
 #include "shell.h"
+#include "uart.h"
 #include "led.h"
 #include "CS42L52.h"
 #include "kl_sd.h"
@@ -15,11 +16,16 @@
 
 #if 1 // ======================== Variables and defines ========================
 // Forever
+bool OsIsInitialized = false;
 EvtMsgQ_t<EvtMsg_t, MAIN_EVT_Q_LEN> EvtQMain;
 static const UartParams_t CmdUartParams(115200, CMD_UART_PARAMS);
-CmdUart_t Uart{&CmdUartParams};
+CmdUart_t Uart{CmdUartParams};
 void OnCmd(Shell_t *PShell);
 void ITask();
+
+//static void Standby();
+static void Resume();
+bool IsStandby = true;
 
 #define PAUSE_BEFORE_REPEAT_S       7
 
@@ -28,21 +34,37 @@ PinOutput_t PwrEn(PWR_EN_PIN);
 CS42L52_t Codec;
 State_t State = stateClosed;
 
-TmrKL_t tmrOpen {TIME_S2I(11), evtIdDoorIsClosing, tktOneShot};
 DirList_t DirList;
-static char FName[MAX_NAME_LEN];
+//static char FName[MAX_NAME_LEN];
 #endif
 
 int main(void) {
     // ==== Setup clock frequency ====
-    Clk.SetCoreClk(cclk24MHz);
+    Clk.SetVoltageRange(mvrHiPerf);
+    Clk.SetupFlashLatency(24, mvrHiPerf);
+    Clk.EnablePrefetch();
+    if(Clk.EnableHSE() == retvOk) {
+        Clk.SetupPllSrc(pllsrcHse);
+        Clk.SetupM(3);
+    }
+    else { // PLL fed by MSI
+        Clk.SetupPllSrc(pllsrcMsi);
+        Clk.SetupM(1);
+    }
+    // SysClock = Rout = 24MHz, 48MHz = POut
+    Clk.SetupPll(24, 4, 2); // 4 * 24 = 96, 96/4=24, 96/2=48
+    Clk.SetupBusDividers(ahbDiv1, apbDiv1, apbDiv1);
+    if(Clk.EnablePLL() == retvOk) {
+        Clk.EnablePllROut();
+        Clk.SwitchToPLL();
+        // Setup PLLQ as 48MHz clock for USB and SDIO
+        Clk.EnablePllQOut();
+        Clk.Select48MHzClkSrc(src48PllQ);
+        // SAI clock
+        Clk.EnablePllPOut();
+        Clk.SelectSAI1Clk(srcSaiPllP);
+    }
     Clk.UpdateFreqValues();
-    // 48 MHz Clock
-    Clk.EnablePLLQOut();
-    Clk.Select48MHzClk(src48PllQ);
-    // SAI clock
-    Clk.EnablePLLPOut();
-    Clk.SelectSAI1Clk(srcSaiPllP);
 
     // Init OS
     halInit();
@@ -56,36 +78,45 @@ int main(void) {
     Led.Init();
 //    Led.SetColor(clRed);
 
+    SD.Init();
+
+    AuPlayer.Init();
     PwrEn.Init();
     PwrEn.SetLo();
     chThdSleepMilliseconds(18);
+    AU_i2c.Init();
 
-    // Audio
-    i2c1.Init();
     Codec.Init();
     Codec.SetSpeakerVolume(-96);    // To remove speaker pop at power on
     Codec.DisableHeadphones();
     Codec.EnableSpeakerMono();
     Codec.SetupMonoStereo(Stereo); // Always
     Codec.Standby();
-    // Decoder
-    Player.Init();
-
-//    i2c1.ScanBus();
-//    Acc.Init();
-
-    SD.Init();
-
-    if(Radio.Init() == retvOk) Led.StartOrRestart(lsqStart);
-    else Led.StartOrRestart(lsqFailure);
-    chThdSleepSeconds(1);
-
     Codec.SetSpeakerVolume(0);
     Codec.SetMasterVolume(9);
     Codec.Resume();
-    Player.Play("alive.wav", spmSingle);
 
-    Led.StartOrRestart(lsqIdle);
+//    Resume();
+
+    if(Radio.Init() != retvOk) {
+        Led.StartOrRestart(lsqFailure);
+        chThdSleepSeconds(3600);
+    }
+
+    if(SD.IsReady) {
+        Led.StartOrRestart(lsqStart);
+//            UsbMsd.Init();
+        AuPlayer.Play("alive.wav", spmSingle);
+    } // if SD is ready
+    else {
+        Led.StartOrRestart(lsqFailure);
+        chThdSleepMilliseconds(3600);
+//            EnterSleep();
+    }
+
+//    AuPlayer.Play("alive.wav", spmSingle);
+
+//    Led.StartOrRestart(lsqIdle);
     SimpleSensors::Init();
 
     // Main cycle
@@ -97,12 +128,11 @@ void ITask() {
     while(true) {
         EvtMsg_t Msg = EvtQMain.Fetch(TIME_INFINITE);
         switch(Msg.ID) {
-            case evtIdShellCmd:
-                OnCmd((Shell_t*)Msg.Ptr);
-                ((Shell_t*)Msg.Ptr)->SignalCmdProcessed();
+            case evtIdShellCmdRcvd:
+                while(((CmdUart_t*)Msg.Ptr)->TryParseRxBuff() == retvOk) OnCmd((Shell_t*)((CmdUart_t*)Msg.Ptr));
                 break;
 
-            case evtIdOnRx: {
+            case evtIdOnRadioRx: {
 //                int32_t rxID = Msg.Value;
 //                if(IdPlayingNow == ID_SURROUND) {
 //                    if(RxTable.EnoughTimePassed(rxID)) {
@@ -141,7 +171,7 @@ void ITask() {
 //                }
 //                break;
 
-#if 1 // ==== Logic ====
+#if 0 // ==== Logic ====
             case evtIdSns:
                 Printf("Sns, %u\r", State);
                 if(State == stateClosed) {
@@ -175,9 +205,9 @@ void ITask() {
                 break;
 #endif
 
-            case evtIdSoundPlayStop: {
+            case evtIdAudioPlayStop: {
                 Printf("PlayEnd\r");
-                Codec.Standby();
+//                Codec.Standby();
 //                IdPlayingNow = IdPlayNext;
 //                IdPlayNext = ID_SURROUND;
 //                // Decide what to play: surround or some id
@@ -198,11 +228,48 @@ void ITask() {
     } // while true
 }
 
+void Resume() {
+    if(!IsStandby) return;
+    Printf("Resume\r");
+    // Clock
+//    Clk.SetCoreClk(cclk48MHz);
+//    Clk.SetupSai1Qas48MhzSrc();
+//    Clk.UpdateFreqValues();
+//    Clk.PrintFreqs();
+    // Sound
+    Codec.Init();
+    Codec.SetSpeakerVolume(-96);    // To remove speaker pop at power on
+    Codec.DisableHeadphones();
+    Codec.EnableSpeakerMono();
+    Codec.SetupMonoStereo(Stereo);  // For wav player
+    Codec.SetupSampleRate(22050); // Just default, will be replaced when changed
+    Codec.SetMasterVolume(9); // 12 is max
+    Codec.SetSpeakerVolume(0); // 0 is max
+
+    IsStandby = false;
+}
+
+/*
+void Standby() {
+    Printf("Standby\r");
+    // Sound
+    Codec.Deinit();
+    // Clock
+    Clk.SwitchToMSI();
+//    Clk.DisablePLL();
+//    Clk.DisableSai1();
+
+    Clk.UpdateFreqValues();
+    Clk.PrintFreqs();
+    IsStandby = true;
+}
+*/
+
 void ProcessSns(PinSnsState_t *PState, uint32_t Len) {
-    if(*PState == pssRising) {
-        EvtQMain.SendNowOrExit(EvtMsg_t(evtIdSns));
-    }
-    Printf("st: %u\r", *PState);
+//    if(*PState == pssRising) {
+//        EvtQMain.SendNowOrExit(EvtMsg_t(evtIdSns));
+//    }
+//    Printf("st: %u\r", *PState);
 }
 
 //void ProcessChargePin(PinSnsState_t *PState, uint32_t Len) {
@@ -219,19 +286,10 @@ void ProcessSns(PinSnsState_t *PState, uint32_t Len) {
 #if 1 // ======================= Command processing ============================
 void OnCmd(Shell_t *PShell) {
 	Cmd_t *PCmd = &PShell->Cmd;
-//    __unused int32_t dw32 = 0;  // May be unused in some configurations
-//    Uart.Printf("\r%S\r", PCmd->Name);
     // Handle command
-    if(PCmd->NameIs("Ping")) PShell->Ack(retvOk);
+    if(PCmd->NameIs("Ping")) PShell->Ok();
     else if(PCmd->NameIs("Version")) PShell->Print("%S %S\r", APP_NAME, XSTRINGIFY(BUILD_TIME));
-
-    else if(PCmd->NameIs("s")) {
-        EvtQMain.SendNowOrExit(EvtMsg_t(evtIdSns));
-    }
-
-    else if(PCmd->NameIs("o")) {
-        EvtQMain.SendNowOrExit(EvtMsg_t(evtIdOpen));
-    }
+    else if(PCmd->NameIs("mem")) PrintMemoryInfo();
 
 //    else if(PCmd->NameIs("V")) {
 //        int8_t v;
@@ -252,6 +310,6 @@ void OnCmd(Shell_t *PShell) {
 //    else if(PCmd->NameIs("FO")) Player.FadeOut();
 
 
-    else PShell->Ack(retvCmdUnknown);
+    else PShell->CmdUnknown();
 }
 #endif

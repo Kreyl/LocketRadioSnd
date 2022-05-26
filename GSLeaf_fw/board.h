@@ -1,7 +1,7 @@
 /*
  * board.h
  *
- *  Created on: 12 сент. 2015 г.
+ *  Created on: 12 пїЅпїЅпїЅпїЅ. 2015 пїЅ.
  *      Author: Kreyl
  */
 
@@ -20,7 +20,7 @@
 // OS timer settings
 #define STM32_ST_IRQ_PRIORITY   2
 #define STM32_ST_USE_TIMER      5
-#define SYS_TIM_CLK             (Clk.APB1FreqHz)    // Timer 5 is clocked by APB1
+#define STM32_TIMCLK1           (Clk.APB1FreqHz)    // Timer 5 is clocked by APB1
 
 //  Periphery
 #define I2C1_ENABLED            TRUE
@@ -30,6 +30,7 @@
 #define BUTTONS_ENABLED         TRUE
 
 #define ADC_REQUIRED            FALSE
+#define STM32_DMA_REQUIRED      TRUE    // Leave this macro name for OS
 
 #if 1 // ========================== GPIO =======================================
 // EXTI
@@ -40,10 +41,8 @@
 #define BTN2_PIN        GPIOA, 1, pudPullDown
 
 // UART
-#define UART_GPIO       GPIOA
-#define UART_TX_PIN     9
-#define UART_RX_PIN     10
-#define UART_AF         AF7 // for all USARTs
+#define UART_TX_PIN     GPIOA, 9
+#define UART_RX_PIN     GPIOA, 10
 
 // RGB LED
 #define LED_RED_CH      { GPIOB, 4, TIM3, 1, invNotInverted, omPushPull, 255 }
@@ -68,6 +67,7 @@
 #define AU_SAI_A        SAI1_Block_A
 #define AU_SAI_B        SAI1_Block_B
 #define AU_SAI_RccEn()  RCC->APB2ENR |= RCC_APB2ENR_SAI1EN
+#define AU_SAI_RccDis() RCC->APB2ENR &= ~RCC_APB2ENR_SAI1EN
 
 // Acc
 #define Acc_i2c         i2c1
@@ -101,11 +101,6 @@
 #define CC_Setup0       SPI1, GPIOA, 5,6,7, GPIOA,4, GPIOA,3
 
 #endif // GPIO
-
-#if 1 // =========================== SPI =======================================
-#define CC_SPI          SPI1
-#define CC_SPI_AF       AF5
-#endif
 
 #if 1 // =========================== I2C =======================================
 // i2cclkPCLK1, i2cclkSYSCLK, i2cclkHSI
@@ -152,7 +147,7 @@
 #define SAI_DMA_CHNL    1
 
 // ==== SDMMC ====
-//#define STM32_SDC_SDMMC1_DMA_STREAM   STM32_DMA_STREAM_ID(2, 5)
+#define STM32_SDC_SDMMC1_DMA_STREAM   STM32_DMA_STREAM_ID(2, 5)
 
 #if ADC_REQUIRED
 #define ADC_DMA         STM32_DMA1_STREAM1
@@ -170,12 +165,14 @@
 #if 1 // ========================== USART ======================================
 #define PRINTF_FLOAT_EN FALSE
 #define UART_TXBUF_SZ   512
-#define UART_RXBUF_SZ   99
+#define UART_RXBUF_SZ   256
+#define CMD_BUF_SZ      256
 
-#define UARTS_CNT       1
+#define CMD_UART        USART1
 
 #define CMD_UART_PARAMS \
-    USART1, UART_GPIO, UART_TX_PIN, UART_GPIO, UART_RX_PIN, \
-    UART_DMA_TX, UART_DMA_RX, UART_DMA_TX_MODE(UART_DMA_CHNL), UART_DMA_RX_MODE(UART_DMA_CHNL), true
+    CMD_UART, UART_TX_PIN, UART_RX_PIN, \
+    UART_DMA_TX, UART_DMA_RX, UART_DMA_TX_MODE(UART_DMA_CHNL), UART_DMA_RX_MODE(UART_DMA_CHNL), \
+    uartclkHSI // Use independent clock
 
 #endif
