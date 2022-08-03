@@ -102,6 +102,8 @@ int main(void) {
 //        EnterSleep();
     }
 
+    Acc.Init();
+
     // Main cycle
     ITask();
 }
@@ -116,7 +118,7 @@ void ITask() {
                 break;
 
             case evtIdOnRadioRx: {
-                Led.StartOrRestart(lsqBlink);
+                Led.StartOrRestart(lsqBlinkBlue);
                 // Check if Stop
                 if(Msg.Value == 0xFF) AuPlayer.FadeOut();
                 else {
@@ -133,6 +135,23 @@ void ITask() {
                     }
                 }
             } break;
+
+            case evtIdAcc:
+                if(IdPlayingNow == -1) { // React when not playing
+                    Printf("AccWhenIdle\r");
+                    Led.StartOrRestart(lsqBlinkGreen);
+                    if(DirList.GetRandomFnameFromDir("Random", FName) == retvOk) {
+                        IdPlayingNow = 0xFF;
+                        Resume();
+                        AuPlayer.Play(FName, spmSingle);
+                    }
+                    else Standby();
+                }
+                else {
+                    Printf("AccWhenBusy\r");
+                    Led.StartOrRestart(lsqBlinkRed);
+                }
+                break;
 
             case evtIdAudioPlayStop:
                 IdPlayingNow = -1;

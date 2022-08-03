@@ -9,7 +9,7 @@
 
 // ==== General ====
 #define BOARD_NAME          "GSLeaf01"
-#define APP_NAME            "GSLeaf"
+#define APP_NAME            "SpeakingStone w Radio & Acc"
 
 // MCU type as defined in the ST header.
 #define STM32L476xx
