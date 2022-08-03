@@ -117,16 +117,20 @@ void ITask() {
 
             case evtIdOnRadioRx: {
                 Led.StartOrRestart(lsqBlink);
-                int32_t rxID = Msg.Value+1;
-                Printf("Btn: %u\r", rxID);
-                if(rxID != IdPlayingNow) {  // Some new ID received
-                    itoa(rxID, DirName, 10);
-                    if(DirList.GetRandomFnameFromDir(DirName, FName) == retvOk) {
-                        IdPlayingNow = rxID;
-                        Resume();
-                        AuPlayer.Play(FName, spmSingle);
+                // Check if Stop
+                if(Msg.Value == 0xFF) AuPlayer.FadeOut();
+                else {
+                    int32_t rxID = Msg.Value+1;
+                    Printf("Btn: %u\r", rxID);
+                    if(rxID != IdPlayingNow) {  // Some new ID received
+                        itoa(rxID, DirName, 10);
+                        if(DirList.GetRandomFnameFromDir(DirName, FName) == retvOk) {
+                            IdPlayingNow = rxID;
+                            Resume();
+                            AuPlayer.Play(FName, spmSingle);
+                        }
+                        else Standby();
                     }
-                    else Standby();
                 }
             } break;
 
