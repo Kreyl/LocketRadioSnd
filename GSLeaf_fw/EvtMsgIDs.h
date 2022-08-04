@@ -17,9 +17,11 @@ enum EvtMsgId_t {
 
     // Misc periph
     evtIdButtons,
-    evtIdAcc,
     evtIdPwrOffTimeout,
     evtIdOnRadioRx,
+
+    evtIdMotion,
+    evtIdStable,
 
     // Audio
     evtIdAudioPlayStop,

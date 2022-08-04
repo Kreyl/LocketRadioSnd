@@ -10,6 +10,7 @@
 #include "AuPlayer.h"
 #include "acc_mma8452.h"
 #include "kl_fs_utils.h"
+#include "ini_kl.h"
 #include "radio_lvl1.h"
 
 #if 1 // ======================== Variables and defines ========================
@@ -30,8 +31,8 @@ bool IsStandby = true;
 LedRGB_t Led { LED_RED_CH, LED_GREEN_CH, LED_BLUE_CH };
 PinOutput_t PwrEn(PWR_EN_PIN);
 CS42L52_t Codec;
+static int32_t Volume = 9;
 int32_t IdPlayingNow = -1;
-
 
 DirList_t DirList;
 static char FName[MAX_NAME_LEN], DirName[MAX_NAME_LEN];
@@ -93,6 +94,30 @@ int main(void) {
     }
 
     if(SD.IsReady) {
+#if 1 // Read config
+        int32_t tmp;
+        if(ini::ReadInt32("Settings.ini", "Common", "Volume", &tmp) == retvOk) {
+            if(tmp >= 0 and tmp <= 100) {
+                // 0...100 => -38...12
+                Volume = (tmp / 2) - 38;
+                Printf("Volume: %d -> %d\r", tmp, Volume);
+            }
+        }
+        if(ini::ReadInt32("Settings.ini", "Common", "Threshold", &tmp) == retvOk) {
+            if(tmp > 0) {
+                Acc.ThresholdStable = tmp;
+                Printf("ThresholdStable: %d\r", tmp);
+            }
+        }
+//        if(ini::ReadInt32("Settings.ini", "Common", "Delay", &tmp) == retvOk) {
+//            if(tmp > 0) {
+//                DelayBeforeNextPlay_s = tmp;
+//                Printf("DelayBeforeNextPlay_s: %d\r", DelayBeforeNextPlay_s);
+//            }
+//        }
+#endif
+        Codec.SetSpeakerVolume(0);
+        Codec.SetMasterVolume(Volume);
         AuPlayer.Play("alive.wav", spmSingle);
         Led.StartOrRestart(lsqStart);
     } // if SD is ready
@@ -136,7 +161,7 @@ void ITask() {
                 }
             } break;
 
-            case evtIdAcc:
+            case evtIdMotion:
                 if(IdPlayingNow == -1) { // React when not playing
                     Printf("AccWhenIdle\r");
                     Led.StartOrRestart(lsqBlinkGreen);
