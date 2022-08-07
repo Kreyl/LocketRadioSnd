@@ -22,6 +22,7 @@ enum EvtMsgId_t {
 
     evtIdMotion,
     evtIdStable,
+    evtIdPauseEnd,
 
     // Audio
     evtIdAudioPlayStop,

@@ -33,7 +33,10 @@ PinOutput_t PwrEn(PWR_EN_PIN);
 CS42L52_t Codec;
 static int32_t Volume = 9;
 int32_t IdPlayingNow = -1;
+uint32_t DelayBeforeNextPlay_s = 4;
+static enum State_t {staIdle, staPlaying, staPauseAfter} State = staIdle;
 
+TmrKL_t TmrPauseAfter {TIME_S2I(7), evtIdPauseEnd, tktOneShot};
 DirList_t DirList;
 static char FName[MAX_NAME_LEN], DirName[MAX_NAME_LEN];
 #endif
@@ -109,17 +112,18 @@ int main(void) {
                 Printf("ThresholdStable: %d\r", tmp);
             }
         }
-//        if(ini::ReadInt32("Settings.ini", "Common", "Delay", &tmp) == retvOk) {
-//            if(tmp > 0) {
-//                DelayBeforeNextPlay_s = tmp;
-//                Printf("DelayBeforeNextPlay_s: %d\r", DelayBeforeNextPlay_s);
-//            }
-//        }
+        if(ini::ReadInt32("Settings.ini", "Common", "Delay", &tmp) == retvOk) {
+            if(tmp > 0) {
+                DelayBeforeNextPlay_s = tmp;
+                Printf("DelayBeforeNextPlay_s: %d\r", DelayBeforeNextPlay_s);
+            }
+        }
 #endif
         Codec.SetSpeakerVolume(0);
         Codec.SetMasterVolume(Volume);
         AuPlayer.Play("alive.wav", spmSingle);
         Led.StartOrRestart(lsqStart);
+        State = staPlaying;
     } // if SD is ready
     else {
         Led.StartOrRestart(lsqFailure);
@@ -142,46 +146,65 @@ void ITask() {
                 while(((CmdUart_t*)Msg.Ptr)->TryParseRxBuff() == retvOk) OnCmd((Shell_t*)((CmdUart_t*)Msg.Ptr));
                 break;
 
-            case evtIdOnRadioRx: {
+            case evtIdOnRadioRx:
                 Led.StartOrRestart(lsqBlinkBlue);
+                Printf("RxID: %u; sta: %u\r", Msg.Value, State);
                 // Check if Stop
                 if(Msg.Value == 0xFF) AuPlayer.FadeOut();
                 else {
                     int32_t rxID = Msg.Value+1;
-                    Printf("Btn: %u\r", rxID);
                     if(rxID != IdPlayingNow) {  // Some new ID received
                         itoa(rxID, DirName, 10);
                         if(DirList.GetRandomFnameFromDir(DirName, FName) == retvOk) {
                             IdPlayingNow = rxID;
                             Resume();
                             AuPlayer.Play(FName, spmSingle);
+                            State = staPlaying;
                         }
                         else Standby();
                     }
                 }
-            } break;
+                break;
 
             case evtIdMotion:
-                if(IdPlayingNow == -1) { // React when not playing
-                    Printf("AccWhenIdle\r");
-                    Led.StartOrRestart(lsqBlinkGreen);
-                    if(DirList.GetRandomFnameFromDir("Random", FName) == retvOk) {
-                        IdPlayingNow = 0xFF;
-                        Resume();
-                        AuPlayer.Play(FName, spmSingle);
-                    }
-                    else Standby();
-                }
-                else {
-                    Printf("AccWhenBusy\r");
-                    Led.StartOrRestart(lsqBlinkRed);
-                }
+                switch(State) {
+                    case staIdle:
+                        Printf("AccWhenIdle\r");
+                        Led.StartOrRestart(lsqBlinkGreen);
+                        if(DirList.GetRandomFnameFromDir("Random", FName) == retvOk) {
+                            IdPlayingNow = 0xFF;
+                            Resume();
+                            AuPlayer.Play(FName, spmSingle);
+                            State = staPlaying;
+                        }
+                        else Standby();
+                        break;
+
+                    case staPlaying:
+                        Printf("AccWhenBusy\r");
+                        Led.StartOrRestart(lsqBlinkRed);
+                        break;
+
+                    case staPauseAfter:
+                        Printf("AccWhenPause\r");
+                        Led.StartOrRestart(lsqBlinkMagenta);
+                        break;
+                } // switch state
                 break;
+
+            case evtIdPauseEnd:
+                Printf("PauseEnd\r");
+                State = AuPlayer.IsPlayingNow()? staPlaying : staIdle;
+                break;
+
 
             case evtIdAudioPlayStop:
                 IdPlayingNow = -1;
                 Printf("PlayEnd\r");
                 Standby();
+                TmrPauseAfter.SetNewPeriod_s(DelayBeforeNextPlay_s);
+                TmrPauseAfter.StartOrRestart();
+                State = staPauseAfter;
             break;
 
             default: break;

@@ -220,6 +220,13 @@ const LedRGBChunk_t lsqBlinkRed[] = {
         {csEnd}
 };
 
+const LedRGBChunk_t lsqBlinkMagenta[] = {
+        {csSetup, 0, clMagenta},
+        {csWait, 90},
+        {csSetup, 0, {0, 1, 0}},
+        {csEnd}
+};
+
 const LedRGBChunk_t lsqBlinkGreen[] = {
         {csSetup, 0, clGreen},
         {csWait, 90},
