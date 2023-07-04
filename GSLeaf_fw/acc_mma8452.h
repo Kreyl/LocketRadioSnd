@@ -5,7 +5,8 @@
  * Created on June 4, 2011, 11:56 AM
  */
 
-#pragma once
+#ifndef ACC_MMA8452_H__
+#define ACC_MMA8452_H__
 
 #include "kl_lib.h"
 #include "shell.h"
@@ -82,3 +83,5 @@ public:
 };
 
 extern Acc_t Acc;
+
+#endif //ACC_MMA8452_H__

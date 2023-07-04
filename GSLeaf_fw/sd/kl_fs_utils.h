@@ -5,7 +5,8 @@
  *      Author: Kreyl
  */
 
-#pragma once
+#ifndef KL_FS_UTILS_H__
+#define KL_FS_UTILS_H__
 
 #include "ff.h"
 #include "kl_lib.h"
@@ -149,3 +150,5 @@ public:
 };
 #endif
 
+
+#endif //KL_FS_UTILS_H__

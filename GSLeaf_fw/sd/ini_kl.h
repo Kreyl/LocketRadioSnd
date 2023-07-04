@@ -5,7 +5,8 @@
  *      Author: Kreyl
  */
 
-#pragma once
+#ifndef INI_KL_H__
+#define INI_KL_H__
 
 #include "kl_lib.h"
 #include "color.h"
@@ -53,3 +54,5 @@ void WriteInt32(FIL *PFile, const char *AKey, const int32_t AValue);
 void WriteNewline(FIL *PFile);
 
 } // namespace
+
+#endif //INI_KL_H__

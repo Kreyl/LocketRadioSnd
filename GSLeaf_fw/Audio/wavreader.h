@@ -1,4 +1,5 @@
-#pragma once
+#ifndef WAVREADER_H__
+#define WAVREADER_H__
 
 #include <cstddef>
 #include <cstdint>
@@ -142,3 +143,5 @@ private:
 
     bool silence_;
 };
+
+#endif //WAVREADER_H__

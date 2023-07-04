@@ -5,7 +5,8 @@
  *      Author: kreyl
  */
 
-#pragma once
+#ifndef KL_SD_H__
+#define KL_SD_H__
 
 #include "ff.h"
 #include "ch.h"
@@ -27,3 +28,5 @@ public:
 };
 
 extern sd_t SD;
+
+#endif //KL_SD_H__

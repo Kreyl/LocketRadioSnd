@@ -5,7 +5,8 @@
  *      Author: Kreyl
  */
 
-#pragma once
+#ifndef BOARD_H__
+#define BOARD_H__
 
 // ==== General ====
 #define BOARD_NAME          "GSLeaf01"
@@ -177,3 +178,5 @@
     uartclkHSI // Use independent clock
 
 #endif
+
+#endif //BOARD_H__

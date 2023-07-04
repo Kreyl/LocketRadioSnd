@@ -5,7 +5,8 @@
  *      Author: g.kruglov
  */
 
-#pragma once
+#ifndef CC1101_H__
+#define CC1101_H__
 
 #include <inttypes.h>
 #include "kl_lib.h"
@@ -96,3 +97,5 @@ public:
         IGdo0(AGd0Gpio, AGdo0, pudNone, CCIrqHandler),
         IState(0), ThdRef(nullptr) {}
 };
+
+#endif //CC1101_H__

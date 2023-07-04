@@ -5,7 +5,8 @@
  *      Author: Kreyl
  */
 
-#pragma once
+#ifndef AUPLAYER_H__
+#define AUPLAYER_H__
 
 #include "kl_lib.h"
 #include "ff.h"
@@ -82,3 +83,5 @@ public:
 };
 
 extern AuPlayer_t AuPlayer;
+
+#endif //AUPLAYER_H__

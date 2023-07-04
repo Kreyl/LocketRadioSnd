@@ -5,7 +5,8 @@
  *      Author: Kreyl
  */
 
-#pragma once
+#ifndef CS42L52_H__
+#define CS42L52_H__
 
 #include "kl_lib.h"
 
@@ -112,3 +113,5 @@ public:
 extern CS42L52_t Codec;
 
 void AuOnNewSampleI(SampleStereo_t &Sample);
+
+#endif //CS42L52_H__
