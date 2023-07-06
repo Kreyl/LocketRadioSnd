@@ -26,19 +26,13 @@ static void Standby();
 static void Resume();
 bool IsStandby = true;
 
-#define PAUSE_BEFORE_REPEAT_S       7
-
-LedRGB_t Led { LED_RED_CH, LED_GREEN_CH, LED_BLUE_CH };
+LedRGB_t Led { LED_RED_CH, LED_GREEN_CH, LED_BLUE_CH }; // Red and Green are used here to control mono LEDs
 PinOutput_t PwrEn(PWR_EN_PIN);
 CS42L52_t Codec;
 static int32_t Volume = 9;
 int32_t IdPlayingNow = -1;
-uint32_t DelayBeforeNextPlay_s = 4;
-static enum State_t {staIdle, staPlaying, staPauseAfter} State = staIdle;
 
-TmrKL_t TmrPauseAfter {TIME_S2I(7), evtIdPauseEnd, tktOneShot};
-DirList_t DirList;
-static char FName[MAX_NAME_LEN], DirName[MAX_NAME_LEN];
+TmrKL_t TmrPauseRestart {TIME_S2I(2), evtIdPauseRestart, tktOneShot};
 #endif
 
 int main(void) {
@@ -90,6 +84,10 @@ int main(void) {
     AuPlayer.Init();
     Resume(); // To generate 48MHz for SD
     SD.Init();
+    // Seed pseudorandom generator with truly random seed
+    Random::TrueInit();
+    Random::SeedWithTrue();
+    Random::TrueDeinit();
 
     if(Radio.Init() != retvOk) {
         Led.StartOrRestart(lsqFailure);
@@ -106,24 +104,23 @@ int main(void) {
                 Printf("Volume: %d -> %d\r", tmp, Volume);
             }
         }
-        if(ini::ReadInt32("Settings.ini", "Common", "Threshold", &tmp) == retvOk) {
-            if(tmp > 0) {
-                Acc.ThresholdStable = tmp;
-                Printf("ThresholdStable: %d\r", tmp);
-            }
-        }
-        if(ini::ReadInt32("Settings.ini", "Common", "Delay", &tmp) == retvOk) {
-            if(tmp > 0) {
-                DelayBeforeNextPlay_s = tmp;
-                Printf("DelayBeforeNextPlay_s: %d\r", DelayBeforeNextPlay_s);
-            }
-        }
+//        if(ini::ReadInt32("Settings.ini", "Common", "Threshold", &tmp) == retvOk) {
+//            if(tmp > 0) {
+//                Acc.ThresholdStable = tmp;
+//                Printf("ThresholdStable: %d\r", tmp);
+//            }
+//        }
+//        if(ini::ReadInt32("Settings.ini", "Common", "Delay", &tmp) == retvOk) {
+//            if(tmp > 0) {
+//                DelayBeforeNextPlay_s = tmp;
+//                Printf("DelayBeforeNextPlay_s: %d\r", DelayBeforeNextPlay_s);
+//            }
+//        }
 #endif
         Codec.SetSpeakerVolume(0);
         Codec.SetMasterVolume(Volume);
         AuPlayer.Play("alive.wav", spmSingle);
         Led.StartOrRestart(lsqStart);
-        State = staPlaying;
     } // if SD is ready
     else {
         Led.StartOrRestart(lsqFailure);
@@ -131,7 +128,9 @@ int main(void) {
 //        EnterSleep();
     }
 
+#if ACC_REQUIRED
     Acc.Init();
+#endif
 
     // Main cycle
     ITask();
@@ -147,25 +146,42 @@ void ITask() {
                 break;
 
             case evtIdOnRadioRx:
-                Led.StartOrRestart(lsqBlinkBlue);
-                Printf("RxID: %u; sta: %u\r", Msg.Value, State);
-                // Check if Stop
-                if(Msg.Value == 0xFF) AuPlayer.FadeOut();
-                else {
-                    int32_t rxID = Msg.Value+1;
-                    if(rxID != IdPlayingNow) {  // Some new ID received
-                        itoa(rxID, DirName, 10);
-                        if(DirList.GetRandomFnameFromDir(DirName, FName) == retvOk) {
-                            IdPlayingNow = rxID;
-                            Resume();
-                            AuPlayer.Play(FName, spmSingle);
-                            State = staPlaying;
-                        }
-                        else Standby();
-                    }
+                Printf("RxID: %u\r", Msg.Value);
+                if(Msg.Value == 0) { // Btn0 pressed => play
+                    if(!TmrPauseRestart.IsRunning()) { // Do not react to a button that is pressed too quickly
+                        TmrPauseRestart.StartOrRestart();
+                        // Generate new filename
+                        int32_t N;
+                        do { // Do not repeat what is playing
+                            N = Random::Generate(1, 3);
+                        } while(N == IdPlayingNow);
+                        IdPlayingNow = N;
+                        // Play what selected
+                        Resume();
+                        switch(N) {
+                            case 1:
+                                Led.StartOrRestart(lsqOn);
+                                AuPlayer.Play("1.wav", spmSingle);
+                                break;
+                            case 2:
+                                Led.StartOrRestart(lsqOn);
+                                AuPlayer.Play("2.wav", spmSingle);
+                                break;
+                            case 3:
+                                Led.StartOrRestart(lsqOff);
+                                AuPlayer.Play("3.wav", spmSingle);
+                                break;
+                            default: break;
+                        } // switch
+                    } // if TmrPauseRestart.IsRunning
+                } // if Btn0 pressed
+                else if(AuPlayer.IsPlayingNow()) { // Stop it
+                    Led.StartOrRestart(lsqOff);
+                    AuPlayer.FadeOut();
                 }
                 break;
 
+#if ACC_REQUIRED
             case evtIdMotion:
                 switch(State) {
                     case staIdle:
@@ -191,20 +207,17 @@ void ITask() {
                         break;
                 } // switch state
                 break;
+#endif
 
-            case evtIdPauseEnd:
-                Printf("PauseEnd\r");
-                State = AuPlayer.IsPlayingNow()? staPlaying : staIdle;
+            case evtIdPauseRestart:
+                Printf("MayRestart\r");
                 break;
-
 
             case evtIdAudioPlayStop:
                 IdPlayingNow = -1;
                 Printf("PlayEnd\r");
                 Standby();
-                TmrPauseAfter.SetNewPeriod_s(DelayBeforeNextPlay_s);
-                TmrPauseAfter.StartOrRestart();
-                State = staPauseAfter;
+                Led.StartOrRestart(lsqOff);
             break;
 
             default: break;
@@ -223,8 +236,6 @@ void Resume() {
 //    Clk.PrintFreqs();
     // Sound
     Codec.Resume();
-
-
     IsStandby = false;
 }
 

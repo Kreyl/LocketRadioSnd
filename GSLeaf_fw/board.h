@@ -10,7 +10,7 @@
 
 // ==== General ====
 #define BOARD_NAME          "GSLeaf01"
-#define APP_NAME            "SpeakingStone w Radio & Acc"
+#define APP_NAME            "SpeakingStone w Radio"
 
 // MCU type as defined in the ST header.
 #define STM32L476xx
@@ -29,6 +29,8 @@
 #define I2C3_ENABLED            FALSE
 #define SIMPLESENSORS_ENABLED   FALSE
 #define BUTTONS_ENABLED         FALSE
+
+#define ACC_REQUIRED            FALSE
 
 #define ADC_REQUIRED            FALSE
 #define STM32_DMA_REQUIRED      TRUE    // Leave this macro name for OS

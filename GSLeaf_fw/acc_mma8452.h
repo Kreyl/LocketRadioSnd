@@ -13,6 +13,8 @@
 #include "board.h"
 #include "kl_i2c.h"
 
+#if ACC_REQUIRED
+
 #define MOTION_BY_IRQ           FALSE //TRUE
 
 #if MOTION_BY_IRQ
@@ -83,5 +85,7 @@ public:
 };
 
 extern Acc_t Acc;
+
+#endif // required
 
 #endif //ACC_MMA8452_H__

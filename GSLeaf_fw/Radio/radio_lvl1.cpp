@@ -48,7 +48,7 @@ void rLevel1_t::ITask() {
         uint8_t Rslt = CC.Receive(27, &PktRx, RPKT_LEN, &Rssi);
         if(Rslt == retvOk) {
 //            Printf("BtnID: %u; Rssi: %d\r", PktRx.BtnIndx, Rssi);
-            if(PktRx.Sign == 0xCA115EA1) EvtQMain.SendNowOrExit(EvtMsg_t(evtIdOnRadioRx, PktRx.BtnIndx));
+            if(PktRx.Sign == 0xCa110fEa) EvtQMain.SendNowOrExit(EvtMsg_t(evtIdOnRadioRx, PktRx.BtnIndx));
         }
         CC.PowerOff();
         chThdSleepMilliseconds(450);

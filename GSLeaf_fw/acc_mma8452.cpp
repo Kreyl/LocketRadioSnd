@@ -1,6 +1,8 @@
 #include "acc_mma8452.h"
 #include "MsgQ.h"
 
+#if ACC_REQUIRED
+
 Acc_t Acc;
 
 #if !MOTION_BY_IRQ
@@ -128,3 +130,5 @@ void Acc_t::Init() {
     // Thread
     chThdCreateStatic(waAccThread, sizeof(waAccThread), NORMALPRIO, (tfunc_t)AccThread, NULL);
 }
+
+#endif // required
