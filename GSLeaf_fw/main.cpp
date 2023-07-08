@@ -78,6 +78,7 @@ int main(void) {
     Codec.EnableSpeakerMono();
     Codec.SetupMonoStereo(Stereo);  // For wav player
     Codec.SetupSampleRate(22050); // Just default, will be replaced when changed
+    chThdSleepMilliseconds(45);
     Codec.SetMasterVolume(9); // 12 is max
     Codec.SetSpeakerVolume(0); // 0 is max
 
