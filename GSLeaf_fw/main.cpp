@@ -24,15 +24,13 @@ void ITask();
 
 static void Standby();
 static void Resume();
-bool IsStandby = true;
+bool must_sleep = false;
 
 LedRGB_t Led { LED_RED_CH, LED_GREEN_CH, LED_BLUE_CH }; // Red and Green are used here to control mono LEDs
 PinOutput_t PwrEn(PWR_EN_PIN);
 CS42L52_t Codec;
-static int32_t Volume = 9;
-int32_t IdPlayingNow = -1;
-
-TmrKL_t TmrPauseRestart {TIME_S2I(2), evtIdPauseRestart, tktOneShot};
+int32_t id_playing_now = -1;
+TmrKL_t tmr_sleep {TIME_S2I(4), evtIdSleep, tktOneShot};
 #endif
 
 int main(void) {
@@ -97,31 +95,21 @@ int main(void) {
 
     if(SD.IsReady) {
 #if 1 // Read config
+        int32_t volume = 9;
         int32_t tmp;
         if(ini::ReadInt32("Settings.ini", "Common", "Volume", &tmp) == retvOk) {
             if(tmp >= 0 and tmp <= 100) {
                 // 0...100 => -38...12
-                Volume = (tmp / 2) - 38;
-                Printf("Volume: %d -> %d\r", tmp, Volume);
+                volume = (tmp / 2) - 38;
+                Printf("Volume: %d -> %d\r", tmp, volume);
             }
         }
-//        if(ini::ReadInt32("Settings.ini", "Common", "Threshold", &tmp) == retvOk) {
-//            if(tmp > 0) {
-//                Acc.ThresholdStable = tmp;
-//                Printf("ThresholdStable: %d\r", tmp);
-//            }
-//        }
-//        if(ini::ReadInt32("Settings.ini", "Common", "Delay", &tmp) == retvOk) {
-//            if(tmp > 0) {
-//                DelayBeforeNextPlay_s = tmp;
-//                Printf("DelayBeforeNextPlay_s: %d\r", DelayBeforeNextPlay_s);
-//            }
-//        }
 #endif
         Codec.SetSpeakerVolume(0);
-        Codec.SetMasterVolume(Volume);
+        Codec.SetMasterVolume(volume);
         AuPlayer.Play("alive.wav", spmSingle);
         Led.StartOrRestart(lsqStart);
+        tmr_sleep.StartOrRestart();
     } // if SD is ready
     else {
         Led.StartOrRestart(lsqFailure);
@@ -147,39 +135,25 @@ void ITask() {
                 break;
 
             case evtIdOnRadioRx:
-                Printf("RxID: %u\r", Msg.Value);
-                if(Msg.Value == 0) { // Btn0 pressed => play
-                    if(!TmrPauseRestart.IsRunning()) { // Do not react to a button that is pressed too quickly
-                        TmrPauseRestart.StartOrRestart();
-                        // Generate new filename
-                        int32_t N;
-                        do { // Do not repeat what is playing
-                            N = Random::Generate(1, 3);
-                        } while(N == IdPlayingNow);
-                        IdPlayingNow = N;
-                        // Play what selected
-                        Resume();
-                        switch(N) {
-                            case 1:
-                                Led.StartOrRestart(lsqOn);
-                                AuPlayer.Play("1.wav", spmSingle);
-                                break;
-                            case 2:
-                                Led.StartOrRestart(lsqOn);
-                                AuPlayer.Play("2.wav", spmSingle);
-                                break;
-                            case 3:
-                                Led.StartOrRestart(lsqOff);
-                                AuPlayer.Play("3.wav", spmSingle);
-                                break;
-                            default: break;
-                        } // switch
-                    } // if TmrPauseRestart.IsRunning
-                } // if Btn0 pressed
-                else if(AuPlayer.IsPlayingNow()) { // Stop it
-                    Led.StartOrRestart(lsqOff);
-                    AuPlayer.FadeOut();
-                }
+                must_sleep = false;
+                tmr_sleep.StartOrRestart();
+                if(!AuPlayer.IsPlayingNow()) {
+                    // Generate new filename
+                    int32_t N;
+                    do { // Do not repeat what is playing
+                        N = Random::Generate(1, 3);
+                    } while(N == id_playing_now);
+                    id_playing_now = N;
+                    // Play what selected
+                    Resume();
+                    Led.StartOrRestart(lsqOn);
+                    switch(N) {
+                        case 1: AuPlayer.Play("birds1.wav", spmSingle); break;
+                        case 2: AuPlayer.Play("birds2.wav", spmSingle); break;
+                        case 3: AuPlayer.Play("birds3.wav", spmSingle); break;
+                        default: break;
+                    } // switch
+                } // if not playing
                 break;
 
 #if ACC_REQUIRED
@@ -210,16 +184,22 @@ void ITask() {
                 break;
 #endif
 
-            case evtIdPauseRestart:
-                Printf("MayRestart\r");
+            case evtIdSleep:
+                must_sleep = true;
+                if(AuPlayer.IsPlayingNow()) AuPlayer.FadeOut();
+                else {
+                    Standby();
+                    Led.StartOrRestart(lsqOff);
+                }
                 break;
 
             case evtIdAudioPlayStop:
-                IdPlayingNow = -1;
                 Printf("PlayEnd\r");
-                Standby();
-                Led.StartOrRestart(lsqOff);
-            break;
+                if(must_sleep) {
+                    Standby();
+                    Led.StartOrRestart(lsqOff);
+                }
+                break;
 
             default: break;
         } // switch
@@ -227,7 +207,6 @@ void ITask() {
 }
 
 void Resume() {
-    if(!IsStandby) return;
     Printf("Resume\r");
     // Clock
 //    if(Clk.EnablePLL() == retvOk) Clk.SwitchToPLL();
@@ -237,7 +216,6 @@ void Resume() {
 //    Clk.PrintFreqs();
     // Sound
     Codec.Resume();
-    IsStandby = false;
 }
 
 void Standby() {
@@ -247,10 +225,9 @@ void Standby() {
 //    // Clock
 //    Clk.SwitchToMSI();
 //    Clk.DisablePll();
-//    Clk.SetupBusDividers(ahbDiv8, apbDiv1, apbDiv1);
+//    Clk.SetupBusDividers(ahbDiv16, apbDiv1, apbDiv1);
 //    Clk.UpdateFreqValues();
 //    Clk.PrintFreqs();
-    IsStandby = true;
 }
 
 #if 1 // ======================= Command processing ============================

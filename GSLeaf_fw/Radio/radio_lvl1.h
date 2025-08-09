@@ -72,18 +72,9 @@ static const uint8_t PwrTable[12] = {
 };
 
 #if 1 // =========================== Pkt_t =====================================
-union rPkt_t {
-    uint32_t DW32[2];
-    struct {
-        uint32_t Sign;
-        uint8_t R, G, B;
-        uint8_t BtnIndx;
-    } __attribute__((__packed__));
-    rPkt_t& operator = (const rPkt_t &Right) {
-        DW32[0] = Right.DW32[0];
-        DW32[1] = Right.DW32[1];
-        return *this;
-    }
+struct rPkt_t {
+    uint32_t TheWord;
+    uint8_t ID;
 } __attribute__ ((__packed__));
 #endif
 

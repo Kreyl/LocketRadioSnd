@@ -206,12 +206,12 @@ const LedRGBChunk_t lsqFailure[] = {
 
 const LedRGBChunk_t lsqOn[] = {
         {csSetup, 360, {0,0,0}},
-        {csSetup, 360, {255,255,255}},
+        {csSetup, 360, {0,1,0}},
         {csEnd}
 };
 
 const LedRGBChunk_t lsqOff[] = {
-        {csSetup, 360, {0,0,0}},
+        {csSetup, 360, {0,0,1}},
         {csEnd}
 };
 

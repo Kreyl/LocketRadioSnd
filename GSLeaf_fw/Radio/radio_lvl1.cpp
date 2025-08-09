@@ -45,13 +45,14 @@ __noreturn
 void rLevel1_t::ITask() {
     while(true) {
         CC.Recalibrate();
-        uint8_t Rslt = CC.Receive(27, &PktRx, RPKT_LEN, &Rssi);
-        if(Rslt == retvOk) {
-            Printf("BtnID: %u; Rssi: %d\r", PktRx.BtnIndx, Rssi);
-            if(PktRx.Sign == 0xCa110fEa) EvtQMain.SendNowOrExit(EvtMsg_t(evtIdOnRadioRx, PktRx.BtnIndx));
-        }
+        uint8_t Rslt = CC.Receive(207, &PktRx, RPKT_LEN, &Rssi);
         CC.PowerOff();
-        chThdSleepMilliseconds(450);
+        if(Rslt == retvOk and PktRx.TheWord == 0xCa110fEa and PktRx.ID == 99) {
+            EvtQMain.SendNowOrExit(EvtMsg_t(evtIdOnRadioRx));
+            Printf("Rssi: %d\r", Rssi);
+            chThdSleepMilliseconds(2700);
+        }
+        chThdSleepMilliseconds(540);
     } // while true
 }
 #endif // task
