@@ -15,7 +15,7 @@
 */
 
  /* Put it here instead of Makefile */
-__main_stack_size__     = 0x0800; 
+__main_stack_size__     = 0x0800;
 __process_stack_size__  = 0x0800;
 
 /*
@@ -86,4 +86,4 @@ REGION_ALIAS("BSS_RAM", ram0);
 REGION_ALIAS("HEAP_RAM", ram0);
 
 /* Generic rules inclusion.*/
-INCLUDE ../rules.ld
+INCLUDE ./rules.ld

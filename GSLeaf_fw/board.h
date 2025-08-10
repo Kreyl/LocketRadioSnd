@@ -1,7 +1,7 @@
 /*
  * board.h
  *
- *  Created on: 12 ����. 2015 �.
+ *  Created on: 2015
  *      Author: Kreyl
  */
 
@@ -10,7 +10,7 @@
 
 // ==== General ====
 #define BOARD_NAME          "GSLeaf01"
-#define APP_NAME            "SpeakingStone w Radio"
+#define APP_NAME            "WarhammerPoint"
 
 // MCU type as defined in the ST header.
 #define STM32L476xx

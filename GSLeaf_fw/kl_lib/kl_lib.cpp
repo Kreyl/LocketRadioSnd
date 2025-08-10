@@ -48,6 +48,56 @@ void PrintThdFreeStack(void *wsp, uint32_t size) {
 
 #endif
 
+uint32_t HashMurmur3_32(const void *key, uint32_t sz, uint32_t seed) {
+    const uint8_t * data = reinterpret_cast<const uint8_t*>(key);
+    const int32_t nblocks = sz / 4;
+    const uint32_t * blocks = reinterpret_cast<const uint32_t*>(data + nblocks*4);
+    uint32_t h = seed;
+    static const uint32_t c1 = 0xcc9e2d51;
+    static const uint32_t c2 = 0x1b873593;
+    auto Rotl32 = [](uint32_t val, uint32_t shift) {
+        return (val << shift) | (val >> (32 - shift));
+    };
+
+    for(int32_t i = -nblocks; i; i++) {
+        uint32_t k1 = blocks[i];
+        k1 *= c1;
+        k1 = Rotl32(k1, 15);
+        k1 *= c2;
+
+        h ^= k1;
+        h = Rotl32(h, 13);
+        h = h * 5 + 0xe6546b64;
+    }
+
+    const uint8_t * tail = static_cast<const uint8_t*>(data + nblocks*4);
+    uint32_t k1 = 0;
+    switch(sz & 3) { // Falling through is intentional
+        case 3: k1 ^= tail[2] << 16;
+        case 2: k1 ^= tail[1] << 8;
+        case 1: k1 ^= tail[0];
+                k1 *= c1;
+                k1 = Rotl32(k1, 15);
+                k1 *= c2;
+                h ^= k1;
+    } // switch
+
+    h ^= sz;
+    h ^= h >> 16;
+    h *= 0x85ebca6b;
+    h ^= h >> 13;
+    h *= 0xc2b2ae35;
+    h ^= h >> 16;
+    return h;
+}
+
+// Using simplified Murmur3 hash function
+uint32_t GetUniqID32() {
+    uint32_t blocks[3] = {GetUniqID1(), GetUniqID2(), GetUniqID3()};
+    uint32_t h = HashMurmur3_32(blocks, sizeof(blocks), 1234);
+    return h;
+}
+
 /********************************************
 arena;     total space allocated from system
 ordblks;   number of non-inuse chunks
@@ -461,12 +511,12 @@ void TmrKLCallback(virtual_timer_t *vtp, void *p) {
 }
 
 void TmrKL_t::IIrqHandler() {    // Call it inside callback
-    EvtQMain.SendNowOrExitI(EvtMsg_t(EvtId));
+    evt_q_main.SendNowOrExitI(EvtMsg_t(evt_id));
     if(TmrType == tktPeriodic) StartI();
 }
 
 void TmrKL_t::StartI() {
-    if(Period == 0) EvtQMain.SendNowOrExitI(EvtMsg_t(EvtId)); // Do not restart even if periodic: this will not work good anyway
+    if(Period == 0) evt_q_main.SendNowOrExitI(EvtMsg_t(evt_id)); // Do not restart even if periodic: this will not work good anyway
     else chVTSetI(&Tmr, Period, TmrKLCallback, this); // Will be reset before start
 }
 #endif

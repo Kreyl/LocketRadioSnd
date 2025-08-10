@@ -73,11 +73,14 @@
  * @brief   FPU initialization switch.
  */
 #if !defined(CRT0_INIT_FPU) || defined(__DOXYGEN__)
+/*
 #if defined(CORTEX_USE_FPU) || defined(__DOXYGEN__)
 #define CRT0_INIT_FPU                       CORTEX_USE_FPU
 #else
 #define CRT0_INIT_FPU                       FALSE
 #endif
+*/
+#define CRT0_INIT_FPU                       TRUE
 #endif
 
 /**

@@ -19,20 +19,20 @@
 AuPlayer_t AuPlayer;
 
 union EvtMsgAudio_t {
-    uint32_t DWord[2];
+    uint32_t dWord[2];
     struct {
-        char* Filename;
-        PlayMode_t Mode : 8;
-        uint8_t ID;
+        char* filename;
+        PlayMode_t mode : 8;
+        uint8_t id;
     } __attribute__((__packed__));
-    EvtMsgAudio_t& operator = (const EvtMsg_t &Right) {
-        DWord[0] = Right.DWord[0];
-        DWord[1] = Right.DWord[1];
+    EvtMsgAudio_t& operator = (const EvtMsgAudio_t &right) {
+        dWord[0] = right.dWord[0];
+        dWord[1] = right.dWord[1];
         return *this;
     }
-    EvtMsgAudio_t() : Filename(nullptr), ID(0) {}
-    EvtMsgAudio_t(uint8_t AID) : ID(AID) {}
-    EvtMsgAudio_t(uint8_t AID, char *AFilename, PlayMode_t AMode) : Filename(AFilename), Mode(AMode), ID(AID) {}
+    EvtMsgAudio_t() : filename(nullptr), id(0) {}
+    EvtMsgAudio_t(uint8_t AID) : id(AID) {}
+    EvtMsgAudio_t(uint8_t AID, char *AFilename, PlayMode_t AMode) : filename(AFilename), mode(AMode), id(AID) {}
 } __attribute__((__packed__));
 
 static EvtMsgQ_t<EvtMsgAudio_t, MAIN_EVT_Q_LEN> EvtQAudio;
@@ -72,10 +72,10 @@ void AuPlayer_t::ITask() {
     while(true) {
         EvtMsgAudio_t Msg = EvtQAudio.Fetch(TIME_INFINITE);
         if(!SD.IsReady) {
-            EvtQMain.SendNowOrExit(EvtMsg_t(evtIdAudioPlayStop));
+            evt_q_main.SendNowOrExit(EvtMsg_t(EvtId::AudioPlayStop));
             continue;
         }
-        switch(Msg.ID) {
+        switch(Msg.id) {
             case aevtNewBufReqd: {
                 SndBuf_t *PBufToFill;
                 PBufToFill = (PCurBuf == &ICurSnd->Buf1)? &ICurSnd->Buf2 : &ICurSnd->Buf1;
@@ -85,14 +85,14 @@ void AuPlayer_t::ITask() {
                     while(Codec.IsTransmitting()) chThdSleepMilliseconds(1);
 //                    Codec.Stop();
 
-                    EvtQMain.SendNowOrExit(EvtMsg_t(evtIdAudioPlayStop));
+                    evt_q_main.SendNowOrExit(EvtMsg_t(EvtId::AudioPlayStop));
                     // Wake waiting thread if any
                     chThdResume(&ThdRef, MSG_OK);   // NotNull check performed inside chThdResume
                 }
             } break;
 
             case aevtPlay:
-                IPlayNext(Msg.Filename, Msg.Mode);
+                IPlayNext(Msg.filename, Msg.mode);
                 break;
 
             case aevtOnSoundSwitch:
@@ -137,20 +137,21 @@ void AuPlayer_t::IPrepareToPlayNext(const char* AFName, PlayMode_t AMode) {
     }
     else {
         Printf("Open %S failed\r", AFName);
-        EvtQMain.SendNowOrExit(EvtMsg_t(evtIdAudioPlayStop));
+        evt_q_main.SendNowOrExit(EvtMsg_t(EvtId::AudioPlayStop));
         // Wake waiting thread if any
         chThdResume(&ThdRef, MSG_OK);   // NotNull check performed inside chThdResume
     }
 }
 
-void AuPlayer_t::Play(const char* AFName, PlayMode_t Mode) {
+void AuPlayer_t::Play(const char* AFName, PlayMode_t mode) {
     Codec.SaiDmaCallbackI = IDmaSAITxIrq;
     if(AFName == nullptr) return;
-    EvtMsgAudio_t Msg(aevtPlay, (char*)AFName, Mode);
+    EvtMsgAudio_t Msg(aevtPlay, (char*)AFName, mode);
     EvtQAudio.SendNowOrExit(Msg);
 }
 
-void AuPlayer_t::Stop() {    ICurSnd->FadeOut();
+void AuPlayer_t::Stop() {
+    ICurSnd->FadeOut();
 }
 
 void AuPlayer_t::WaitEnd() {

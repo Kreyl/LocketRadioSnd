@@ -62,7 +62,7 @@ protected:
     void ISendViaDMA();
     int32_t RIndx;
     uint8_t IRxBuf[UART_RXBUF_SZ];
-    uint8_t IPutByte(uint8_t b);
+    retv IPutByte(uint8_t b);
     uint8_t IPutByteNow(uint8_t b);
     void IStartTransmissionIfNotYet();
     // ==== Constructor ====
@@ -88,16 +88,16 @@ public:
     virtual void OnUartIrqI(uint32_t flags) = 0;
 };
 
-class CmdUart_t : public BaseUart_t, public PrintfHelper_t, public Shell_t {
+class CmdUart : public BaseUart_t, public Shell {
 protected:
-    uint8_t IPutChar(char c) { return IPutByte(c); }
+    retv IPutChar(char c) { return IPutByte(c); }
     void IStartTransmissionIfNotYet() { BaseUart_t::IStartTransmissionIfNotYet(); }
 public:
-    CmdUart_t(const UartParams_t &APParams) : BaseUart_t(APParams) {}
+    CmdUart(const UartParams_t &APParams) : BaseUart_t(APParams) {}
     uint8_t TryParseRxBuff() {
         uint8_t b;
         while(GetByte(&b) == retvOk) {
-            if(Cmd.PutChar(b) == pdrNewCmd) return retvOk;
+            if(cmd.PutChar(b) == pdrNewCmd) return retvOk;
         } // while get byte
         return retvFail;
     }
@@ -112,40 +112,21 @@ public:
     void OnUartIrqI(uint32_t flags);
 };
 
-class HostUart_t : private CmdUart_t {
-private:
-    thread_reference_t ThdRef = nullptr;
-    uint8_t TryParseRxBuff();
-public:
-    void Init() { CmdUart_t::Init(); }
-    HostUart_t(const UartParams_t &APParams) : CmdUart_t(APParams) {}
-    uint8_t SendCmd(uint32_t Timeout_ms, const char *format, ...);
-    void Print(const char *format, ...) {
-        va_list args;
-        va_start(args, format);
-        IVsPrintf(format, args);
-        va_end(args);
-    }
-    Cmd_t &Reply = Cmd;
-    uint8_t WaitReply();
-    void OnUartIrqI(uint32_t flags);
-};
-
-class CmdUart485_t : public CmdUart_t {
+class CmdUart485_t : public CmdUart {
 private:
     GPIO_TypeDef *PGpioDE;
     uint16_t PinDE;
     AlterFunc_t AltFuncDE;
 public:
     void Init() {
-        CmdUart_t::Init();
+        CmdUart::Init();
         PinSetupAlterFunc(PGpioDE, PinDE, omPushPull, pudNone, AltFuncDE);
         Params->Uart->CR1 &= ~USART_CR1_UE;   // Disable USART
         Params->Uart->CR3 |= USART_CR3_DEM;   // Enable DriverEnable signal
         Params->Uart->CR1 |= USART_CR1_UE;    // Enable USART
     }
     CmdUart485_t(const UartParams_t &APParams, GPIO_TypeDef *APGPIO, uint16_t APin, AlterFunc_t AAf) :
-        CmdUart_t(APParams), PGpioDE(APGPIO), PinDE(APin), AltFuncDE(AAf) {}
+        CmdUart(APParams), PGpioDE(APGPIO), PinDE(APin), AltFuncDE(AAf) {}
 };
 
 class HostUart485_t : private CmdUart485_t {
@@ -160,23 +141,23 @@ public:
     void SendBroadcast(uint32_t Delay_ms, int32_t RepeatCnt, const char* ACmd, const char *format = nullptr, ...);
     uint8_t SendCmdAndTransmitBuf(uint32_t Timeout_ms, uint8_t *PBuf, uint32_t Len, const char* ACmd, uint32_t Addr, const char *format = nullptr, ...);
     uint8_t SendCmdAndReceiveBuf(uint32_t Timeout_ms, uint8_t *PBuf, uint32_t Len, const char* ACmd, uint32_t Addr, const char *format = nullptr, ...);
-    Cmd_t &Reply = Cmd;
+    Cmd_t &Reply = cmd;
     void OnUartIrqI(uint32_t flags);
 };
 
-class CmdUart422_t : public CmdUart_t  {
+class CmdUart422_t : public CmdUart  {
 private:
     thread_reference_t ThdRef = nullptr;
     bool WaitingReply = false;
 public:
     uint8_t TryParseRxBuff();
-    void Init() { CmdUart_t::Init(); }
-    CmdUart422_t(const UartParams_t &APParams) : CmdUart_t(APParams) {}
+    void Init() { CmdUart::Init(); }
+    CmdUart422_t(const UartParams_t &APParams) : CmdUart(APParams) {}
 
     uint8_t SendCmd(uint32_t Timeout_ms, int32_t RetryCnt, const char* ACmd, const char *format = nullptr, ...);
     uint8_t SendCmdAndTransmitBuf(uint32_t Timeout_ms, uint8_t *PBuf, uint32_t Len, const char* ACmd, const char *format = nullptr, ...);
     uint8_t SendCmdAndReceiveBuf(uint32_t Timeout_ms, uint8_t *PBuf, uint32_t Len, const char* ACmd, const char *format = nullptr, ...);
-    Cmd_t &Reply = Cmd;
+    Cmd_t &Reply = cmd;
     void OnUartIrqI(uint32_t flags);
 };
 
@@ -223,7 +204,7 @@ private:
         va_end(args);
     }
 public:
-    ModbusCmd_t Cmd;
+    ModbusCmd_t cmd;
 
     void Init() {
         BaseUart_t::Init();

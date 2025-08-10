@@ -12,28 +12,30 @@
 #include "kl_fs_utils.h"
 #include "ini_kl.h"
 #include "radio_lvl1.h"
+#include "App.h"
+#include "version.h"
 
 #if 1 // ======================== Variables and defines ========================
 // Forever
 bool OsIsInitialized = false;
-EvtMsgQ_t<EvtMsg_t, MAIN_EVT_Q_LEN> EvtQMain;
+EvtMsgQ_t<EvtMsg_t, MAIN_EVT_Q_LEN> evt_q_main;
 static const UartParams_t CmdUartParams(115200, CMD_UART_PARAMS);
-CmdUart_t Uart{CmdUartParams};
-void OnCmd(Shell_t *PShell);
+CmdUart uart{CmdUartParams};
+void OnCmd(Shell *pshell);
 void ITask();
 
-static void Standby();
-static void Resume();
+void Standby();
+void Resume();
 bool must_sleep = false;
 
-LedRGB_t Led { LED_RED_CH, LED_GREEN_CH, LED_BLUE_CH }; // Red and Green are used here to control mono LEDs
+LedRGB_t led { LED_RED_CH, LED_GREEN_CH, LED_BLUE_CH }; // Red and Green are used here to control mono LEDs
 PinOutput_t PwrEn(PWR_EN_PIN);
 CS42L52_t Codec;
 int32_t id_playing_now = -1;
-TmrKL_t tmr_sleep {TIME_S2I(4), evtIdSleep, tktOneShot};
+TmrKL_t tmr_sleep {TIME_S2I(4), EvtId::Sleep, tktOneShot};
 #endif
 
-int main(void) {
+void main(void) {
     // ==== Setup clock frequency ====
     Clk.SetVoltageRange(mvrHiPerf);
     Clk.SetupFlashLatency(24, mvrHiPerf);
@@ -58,12 +60,13 @@ int main(void) {
     halInit();
     chSysInit();
     // ==== Init hardware ====
-    EvtQMain.Init();
-    Uart.Init();
-    Printf("\r%S %S\r\n", APP_NAME, XSTRINGIFY(BUILD_TIME));
+    evt_q_main.Init();
+    uart.Init();
+    cfg.id = GetUniqID32();
+    Printf("\r%S %S; ID: 0x%08X\r", APP_NAME, kBuildTime, cfg.id);
     Clk.PrintFreqs();
 
-    Led.Init();
+    led.Init();
     PwrEn.Init();
     PwrEn.SetLo();
     chThdSleepMilliseconds(18);
@@ -88,8 +91,8 @@ int main(void) {
     Random::SeedWithTrue();
     Random::TrueDeinit();
 
-    if(Radio.Init() != retvOk) {
-        Led.StartOrRestart(lsqFailure);
+    if(Radio::Init().NotOk()) {
+        led.StartOrRestart(lsqFailure);
         chThdSleepSeconds(3600);
     }
 
@@ -105,21 +108,29 @@ int main(void) {
             }
         }
 #endif
+
+        volume = -10;
+
         Codec.SetSpeakerVolume(0);
         Codec.SetMasterVolume(volume);
         AuPlayer.Play("alive.wav", spmSingle);
-        Led.StartOrRestart(lsqStart);
+        led.StartOrRestart(lsqStart);
         tmr_sleep.StartOrRestart();
     } // if SD is ready
     else {
-        Led.StartOrRestart(lsqFailure);
-        chThdSleepMilliseconds(3600);
+        led.StartOrRestart(lsqFailure);
 //        EnterSleep();
     }
+    chThdSleepMilliseconds(3600);
 
 #if ACC_REQUIRED
     Acc.Init();
 #endif
+
+    // Init App
+    cfg.type = DevType::Active;
+    cfg.tx_power = CC_PwrMinus10dBm;
+    led.StartOrRestart(lsqActive);
 
     // Main cycle
     ITask();
@@ -128,40 +139,44 @@ int main(void) {
 __noreturn
 void ITask() {
     while(true) {
-        EvtMsg_t Msg = EvtQMain.Fetch(TIME_INFINITE);
-        switch(Msg.ID) {
-            case evtIdShellCmdRcvd:
-                while(((CmdUart_t*)Msg.Ptr)->TryParseRxBuff() == retvOk) OnCmd((Shell_t*)((CmdUart_t*)Msg.Ptr));
+        EvtMsg_t msg = evt_q_main.Fetch(TIME_INFINITE);
+        switch(msg.id) {
+            case EvtId::ShellCmdRcvd:
+                while(((CmdUart*)msg.ptr)->TryParseRxBuff() == retvOk) OnCmd((Shell*)((CmdUart*)msg.ptr));
                 break;
 
-            case evtIdOnRadioRx:
-                must_sleep = false;
-                tmr_sleep.StartOrRestart();
-                if(!AuPlayer.IsPlayingNow()) {
-                    // Generate new filename
-                    int32_t N;
-                    do { // Do not repeat what is playing
-                        N = Random::Generate(1, 3);
-                    } while(N == id_playing_now);
-                    id_playing_now = N;
-                    // Play what selected
-                    Resume();
-                    Led.StartOrRestart(lsqOn);
-                    switch(N) {
-                        case 1: AuPlayer.Play("birds1.wav", spmSingle); break;
-                        case 2: AuPlayer.Play("birds2.wav", spmSingle); break;
-                        case 3: AuPlayer.Play("birds3.wav", spmSingle); break;
-                        default: break;
-                    } // switch
-                } // if not playing
+            case EvtId::CheckRxTable:
+                App::ProcessRxTbl(*static_cast<RxTable*>(msg.ptr));
                 break;
+
+            // case evtIdOnRadioRx:
+            //     must_sleep = false;
+            //     tmr_sleep.StartOrRestart();
+            //     if(!AuPlayer.IsPlayingNow()) {
+            //         // Generate new filename
+            //         int32_t N;
+            //         do { // Do not repeat what is playing
+            //             N = Random::Generate(1, 3);
+            //         } while(N == id_playing_now);
+            //         id_playing_now = N;
+            //         // Play what selected
+            //         Resume();
+            //         led.StartOrRestart(lsqOn);
+            //         switch(N) {
+            //             case 1: AuPlayer.Play("birds1.wav", spmSingle); break;
+            //             case 2: AuPlayer.Play("birds2.wav", spmSingle); break;
+            //             case 3: AuPlayer.Play("birds3.wav", spmSingle); break;
+            //             default: break;
+            //         } // switch
+            //     } // if not playing
+            //     break;
 
 #if ACC_REQUIRED
             case evtIdMotion:
                 switch(State) {
                     case staIdle:
                         Printf("AccWhenIdle\r");
-                        Led.StartOrRestart(lsqBlinkGreen);
+                        led.StartOrRestart(lsqBlinkGreen);
                         if(DirList.GetRandomFnameFromDir("Random", FName) == retvOk) {
                             IdPlayingNow = 0xFF;
                             Resume();
@@ -173,31 +188,29 @@ void ITask() {
 
                     case staPlaying:
                         Printf("AccWhenBusy\r");
-                        Led.StartOrRestart(lsqBlinkRed);
+                        led.StartOrRestart(lsqBlinkRed);
                         break;
 
                     case staPauseAfter:
                         Printf("AccWhenPause\r");
-                        Led.StartOrRestart(lsqBlinkMagenta);
+                        led.StartOrRestart(lsqBlinkMagenta);
                         break;
                 } // switch state
                 break;
 #endif
 
-            case evtIdSleep:
+            case EvtId::Sleep:
                 must_sleep = true;
                 if(AuPlayer.IsPlayingNow()) AuPlayer.FadeOut();
                 else {
                     Standby();
-                    Led.StartOrRestart(lsqOff);
                 }
                 break;
 
-            case evtIdAudioPlayStop:
+            case EvtId::AudioPlayStop:
                 Printf("PlayEnd\r");
                 if(must_sleep) {
                     Standby();
-                    Led.StartOrRestart(lsqOff);
                 }
                 break;
 
@@ -231,21 +244,21 @@ void Standby() {
 }
 
 #if 1 // ======================= Command processing ============================
-void OnCmd(Shell_t *PShell) {
-	Cmd_t *PCmd = &PShell->Cmd;
+void OnCmd(Shell *pshell) {
+	Cmd_t *PCmd = &pshell->cmd;
     // Handle command
-    if(PCmd->NameIs("Ping")) PShell->Ok();
-    else if(PCmd->NameIs("Version")) PShell->Print("%S %S\r", APP_NAME, XSTRINGIFY(BUILD_TIME));
+    if(PCmd->NameIs("Ping")) pshell->Ok();
+    else if(PCmd->NameIs("Version")) pshell->Print("%S %S\r", APP_NAME, XSTRINGIFY(BUILD_TIME));
     else if(PCmd->NameIs("mem")) PrintMemoryInfo();
 
 //    else if(PCmd->NameIs("V")) {
 //        int8_t v;
-//        if(PCmd->GetNext<int8_t>(&v) != retvOk) { PShell->Ack(retvCmdError); return; }
+//        if(PCmd->GetNext<int8_t>(&v) != retvOk) { pshell->Ack(retvCmdError); return; }
 //        Audio.SetMasterVolume(v);
 //    }
 //    else if(PCmd->NameIs("SV")) {
 //        int8_t v;
-//        if(PCmd->GetNext<int8_t>(&v) != retvOk) { PShell->Ack(retvCmdError); return; }
+//        if(PCmd->GetNext<int8_t>(&v) != retvOk) { pshell->Ack(retvCmdError); return; }
 //        Audio.SetSpeakerVolume(v);
 //    }
 
@@ -260,6 +273,6 @@ void OnCmd(Shell_t *PShell) {
 //    else if(PCmd->NameIs("FO")) Player.FadeOut();
 
 
-    else PShell->CmdUnknown();
+    else App::OnCmd(pshell);
 }
 #endif

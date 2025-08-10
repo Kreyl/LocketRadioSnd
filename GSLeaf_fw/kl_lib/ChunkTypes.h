@@ -1,7 +1,7 @@
 /*
  * ChunkTypes.h
  *
- *  Created on: 08 ÿíâ. 2015 ã.
+ *  Created on: 08 ï¿½ï¿½ï¿½. 2015 ï¿½.
  *      Author: Kreyl
  */
 
@@ -64,7 +64,7 @@ protected:
     virtual_timer_t ITmr;
     const TChunk *IPStartChunk, *IPCurrentChunk;
     int32_t RepeatCounter = -1;
-    EvtMsg_t IEvtMsg;
+    EvtMsg_t ievt_msg;
     virtual void ISwitchOff() = 0;
     virtual SequencerLoopTask_t ISetup() = 0;
     void SetupDelay(uint32_t ms) { chVTSetI(&ITmr, TIME_MS2I(ms), TmrKLCallback, this); }
@@ -90,13 +90,13 @@ protected:
 
                 case csGoto:
                     IPCurrentChunk = IPStartChunk + IPCurrentChunk->ChunkToJumpTo;
-                    if(IEvtMsg.ID != evtIdNone) EvtQMain.SendNowOrExitI(IEvtMsg);
+                    if(ievt_msg.id != EvtId::None) evt_q_main.SendNowOrExitI(ievt_msg);
                     SetupDelay(1);
                     return;
                     break;
 
                 case csEnd:
-                    if(IEvtMsg.ID != evtIdNone) EvtQMain.SendNowOrExitI(IEvtMsg);
+                    if(ievt_msg.id != EvtId::None) evt_q_main.SendNowOrExitI(ievt_msg);
                     IPStartChunk = nullptr;
                     IPCurrentChunk = nullptr;
                     return;
@@ -117,7 +117,7 @@ protected:
         } // while
     } // IProcessSequenceI
 public:
-    void SetupSeqEndEvt(EvtMsg_t AEvtMsg) { IEvtMsg = AEvtMsg; }
+    void SetupSeqEndEvt(EvtMsg_t AEvtMsg) { ievt_msg = AEvtMsg; }
 
     void StartOrRestart(const TChunk *PChunk) {
         chSysLock();

@@ -13,6 +13,7 @@
 #include <cstdlib>
 #include <sys/cdefs.h>
 #include "EvtMsgIDs.h"
+#include "types.h"
 
 // ==== Build time ====
 // Define symbol BUILD_TIME in main.cpp options with value ${current_date}.
@@ -154,11 +155,6 @@ static T Average(T *p, uint32_t Len) {
 }
 
 template <typename T>
-static inline T Proportion(T MinX, T MaxX, T MinY, T MaxY, T x) {
-    return (((x - MaxX) * (MaxY - MinY)) / (MaxX - MinX)) + MaxY;
-}
-
-template <typename T>
 static T FindMediana(T *Arr, int32_t N) {
     int32_t L = 1, r = N, i, j, k = N / 2;
     T x;
@@ -186,6 +182,9 @@ static T FindMediana(T *Arr, int32_t N) {
 // Amount of memory occupied by thread
 uint32_t GetThdFreeStack(void *wsp, uint32_t size);
 void PrintThdFreeStack(void *wsp, uint32_t size);
+
+// Murmur3 hash
+uint32_t HashMurmur3_32(const void *key, uint32_t len, uint32_t seed);
 
 /*
  * Early initialization code.
@@ -270,6 +269,8 @@ static inline uint32_t GetUniqID3() {
     return *((uint32_t*)(UNIQ_ID_BASE + 0x08));
 }
 #endif
+
+uint32_t GetUniqID32(); // Construct uniq id by hashing hw uniq id
 #endif
 
 #if 1 // ======================= Virtual Timer =================================
@@ -288,7 +289,7 @@ private:
     virtual_timer_t Tmr;
     void StartI();
     sysinterval_t Period;
-    EvtMsgId_t EvtId;
+    EvtId evt_id;
     TmrKLType_t TmrType;
     void IIrqHandler();
 public:
@@ -315,11 +316,11 @@ public:
     void SetNewPeriod_ms(uint32_t NewPeriod) { Period = TIME_MS2I(NewPeriod); }
     void SetNewPeriod_s(uint32_t NewPeriod) { Period = TIME_S2I(NewPeriod); }
 
-    TmrKL_t(sysinterval_t APeriod, EvtMsgId_t AEvtId, TmrKLType_t AType) :
-        Period(APeriod), EvtId(AEvtId), TmrType(AType) {}
+    TmrKL_t(sysinterval_t APeriod, EvtId AEvtId, TmrKLType_t AType) :
+        Period(APeriod), evt_id(AEvtId), TmrType(AType) {}
     // Dummy period is set
-    TmrKL_t(EvtMsgId_t AEvtId, TmrKLType_t AType) :
-            Period(TIME_S2I(9)), EvtId(AEvtId), TmrType(AType) {}
+    TmrKL_t(EvtId AEvtId, TmrKLType_t AType) :
+            Period(TIME_S2I(9)), evt_id(AEvtId), TmrType(AType) {}
 };
 #endif
 
